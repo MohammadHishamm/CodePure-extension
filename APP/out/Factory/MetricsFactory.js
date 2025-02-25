@@ -3,6 +3,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.MetricsFactory = void 0;
 // ..
 const JavaAMW_1 = require("../Metrics/Java/JavaAMW");
+const JavaDAC_1 = require("../Metrics/Java/JavaDAC");
 const JavaLOCC_1 = require("../Metrics/Java/JavaLOCC");
 const JavaNAbsm_1 = require("../Metrics/Java/JavaNAbsm");
 const JavaNOA_1 = require("../Metrics/Java/JavaNOA");
@@ -55,8 +56,8 @@ class MetricsFactory {
             // return new JavaNumberofFeatureEnvyMethods();
             case `CBO`:
                 return new JavaCBO_1.JavaCouplingBetweenObjects();
-            // case `DAC`:
-            //   return new JavaDataAbstractionCoupling();
+            case `DAC`:
+                return new JavaDAC_1.JavaDataAbstractionCoupling();
             case "NOA":
                 return new JavaNOA_1.JavaNumberOfAttributes();
             case "NOM":

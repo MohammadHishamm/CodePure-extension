@@ -46,7 +46,7 @@ export async function analyzeCode(
         // "LAA",
         // "NrFE",
         // "CBO",
-        // "DAC",
+        "DAC",
         "WMC",
         "WOC",
         "NOA",

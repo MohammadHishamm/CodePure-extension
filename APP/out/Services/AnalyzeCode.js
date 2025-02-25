@@ -63,7 +63,7 @@ async function analyzeCode(document, sourceCode) {
             // "LAA",
             // "NrFE",
             // "CBO",
-            // "DAC",
+            "DAC",
             "WMC",
             "WOC",
             "NOA",

@@ -67,8 +67,8 @@ export class MetricsFactory {
       // return new JavaNumberofFeatureEnvyMethods();
       case `CBO`:
         return new JavaCouplingBetweenObjects();
-      // case `DAC`:
-      //   return new JavaDataAbstractionCoupling();
+      case `DAC`:
+        return new JavaDataAbstractionCoupling();
       case "NOA":
         return new JavaNumberOfAttributes();
       case "NOM":
