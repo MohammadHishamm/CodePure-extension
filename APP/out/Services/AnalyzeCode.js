@@ -34,12 +34,13 @@ var __importStar = (this && this.__importStar) || (function () {
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.analyzeCode = analyzeCode;
-exports.AnalyzeSelctedCode = AnalyzeSelctedCode;
 const vscode = __importStar(require("vscode"));
 const MetricsFactory_1 = require("../Factory/MetricsFactory");
 const initialize_1 = require("../initialize");
 const utils_1 = require("../utils");
+const GoogleGemini_AI_1 = require("../Services/GoogleGemini_AI");
 let isAnalyzing = false;
+const diagnosticCollection = vscode.languages.createDiagnosticCollection("codepure");
 async function analyzeCode(document, sourceCode) {
     if (isAnalyzing) {
         vscode.window.showInformationMessage("Analysis is already running. Please wait...");
@@ -55,36 +56,13 @@ async function analyzeCode(document, sourceCode) {
         parser.selectLanguage();
         const rootNode = parser.parse(sourceCode);
         const metricsToCalculate = [
-            "LOC",
-            "AMW",
-            "CBO",
-            // "ATFD",
-            "FDP",
-            // "LAA",
-            // "NrFE",
-            // "CBO",
-            "DAC",
-            "WMC",
-            "WOC",
-            "NOA",
-            "NOM",
-            "NOAM",
-            "NOPA",
-            "NAbsm",
-            "NProtM",
-            // "FANOUT",
-            // "NDU",
-            "NAS",
-            "PNAS",
-            // "BUR",
-            // "NOD",
-            // "NODD",
-            "TCC",
-            "DIT",
+            "LOC", "AMW", "CBO", "FDP", "DAC", "WMC", "WOC", "NOA",
+            "NOM", "NOAM", "NOPA", "NAbsm", "NProtM", "NAS", "PNAS",
+            "TCC", "DIT",
         ];
         try {
             progress.report({ message: "Initializing parser...", increment: 10 });
-            await (0, utils_1.pause)(500); // Simulate processing delay
+            await (0, utils_1.pause)(500);
             progress.report({ message: "Parsing source code...", increment: 20 });
             await (0, utils_1.pause)(500);
             progress.report({
@@ -97,41 +75,12 @@ async function analyzeCode(document, sourceCode) {
             if (results) {
                 vscode.window.showInformationMessage("Analysis is Finished.");
                 initialize_1.servermetricsmanager.sendMetricsFile();
+                // Detect code smells and suggest AI fixes
+                detectAndSuggestFixes(document, results);
             }
             else {
-                vscode.window.showInformationMessage("Error Occured While Analyzing.");
+                vscode.window.showInformationMessage("Error Occurred While Analyzing.");
             }
-            return results;
-        }
-        finally {
-            isAnalyzing = false;
-        }
-    });
-}
-async function AnalyzeSelctedCode(document, sourceCode) {
-    if (isAnalyzing) {
-        vscode.window.showInformationMessage("Analysis is already running. Please wait...");
-        return "Analysis in progress";
-    }
-    isAnalyzing = true;
-    return await vscode.window.withProgress({
-        location: vscode.ProgressLocation.Notification,
-        title: `Analyzing Selected code in ${document.languageId}`,
-        cancellable: false,
-    }, async (progress) => {
-        const parser = document.languageId === "java" ? new initialize_1.javaParser() : new initialize_1.pythonParser();
-        parser.selectLanguage();
-        const rootNode = parser.parse(sourceCode);
-        const metricsToCalculate = vscode.workspace
-            .getConfiguration("codepure")
-            .get("selectedMetrics", []);
-        try {
-            progress.report({ message: "Initializing parser...", increment: 10 });
-            await (0, utils_1.pause)(500); // Simulate processing delay
-            progress.report({ message: "Parsing source code...", increment: 20 });
-            await (0, utils_1.pause)(500);
-            const results = await calculateMetricsWithProgress(document, rootNode, sourceCode, document.languageId, metricsToCalculate, progress);
-            initialize_1.servermetricsmanager.sendMetricsFile();
             return results;
         }
         finally {
@@ -149,9 +98,9 @@ async function calculateMetricsWithProgress(document, rootNode, sourceCode, lang
             // Update progress
             progress.report({
                 message: `Calculating ${metricName}...`,
-                increment: 70 / metrics.length, // Distribute remaining progress evenly
+                increment: 70 / metrics.length,
             });
-            await (0, utils_1.pause)(300); // Simulate delay for each metric
+            await (0, utils_1.pause)(300);
         }
     }
     initialize_1.metricsSaver.saveMetrics(results.map((result) => {
@@ -160,4 +109,51 @@ async function calculateMetricsWithProgress(document, rootNode, sourceCode, lang
     }), document.fileName);
     return results.join("\n");
 }
+async function detectAndSuggestFixes(document, results) {
+    const diagnostics = [];
+    if (results.includes("WMC") && results.includes("LOC")) {
+        const fullRange = new vscode.Range(new vscode.Position(0, 0), new vscode.Position(document.lineCount - 1, document.lineAt(document.lineCount - 1).text.length));
+        const diagnostic = new vscode.Diagnostic(fullRange, "Potential Brain Class detected. AI can suggest a fix.", vscode.DiagnosticSeverity.Warning);
+        diagnostic.code = "brainClass";
+        diagnostic.source = "CodePure";
+        diagnostics.push(diagnostic);
+    }
+    diagnosticCollection.set(document.uri, diagnostics);
+}
+vscode.languages.registerCodeActionsProvider("*", {
+    provideCodeActions(document, range, context, token) {
+        const actions = [];
+        for (const diagnostic of context.diagnostics) {
+            if (diagnostic.code === "brainClass") {
+                const fixAction = new vscode.CodeAction("CodePure: ✨ Apply AI Fix for Brain Class", vscode.CodeActionKind.QuickFix);
+                fixAction.command = {
+                    command: "codepure.getAIFix",
+                    title: "Apply AI Fix",
+                    arguments: [document],
+                };
+                fixAction.diagnostics = [diagnostic];
+                actions.push(fixAction);
+            }
+        }
+        return actions;
+    },
+});
+vscode.commands.registerCommand("codepure.getAIFix", async (document) => {
+    if (!document)
+        return;
+    vscode.window.showInformationMessage("Fetching AI fix suggestion...");
+    const sourceCode = document.getText();
+    const issue = "Brain Class detected, suggest a fix.";
+    const fix = await (0, GoogleGemini_AI_1.getFixSuggestion)(sourceCode, issue);
+    if (fix) {
+        const edit = new vscode.WorkspaceEdit();
+        const fullRange = new vscode.Range(new vscode.Position(0, 0), new vscode.Position(document.lineCount, 0));
+        edit.replace(document.uri, fullRange, fix);
+        await vscode.workspace.applyEdit(edit);
+        vscode.window.showInformationMessage("AI Fix applied!");
+    }
+    else {
+        vscode.window.showWarningMessage("No AI fix suggestion available.");
+    }
+});
 //# sourceMappingURL=AnalyzeCode.js.map

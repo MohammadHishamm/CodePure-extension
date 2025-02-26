@@ -8,8 +8,10 @@ import {
   javaParser,
 } from "../initialize";
 import { pause } from "../utils";
+import { getFixSuggestion } from "../Services/GoogleGemini_AI";
 
 let isAnalyzing = false;
+const diagnosticCollection = vscode.languages.createDiagnosticCollection("codepure");
 
 export async function analyzeCode(
   document: vscode.TextDocument,
@@ -38,37 +40,14 @@ export async function analyzeCode(
       const rootNode = parser.parse(sourceCode);
 
       const metricsToCalculate = [
-        "LOC",
-        "AMW",
-        "CBO",
-        // "ATFD",
-        "FDP",
-        // "LAA",
-        // "NrFE",
-        // "CBO",
-        "DAC",
-        "WMC",
-        "WOC",
-        "NOA",
-        "NOM",
-        "NOAM",
-        "NOPA",
-        "NAbsm",
-        "NProtM",
-        // "FANOUT",
-        // "NDU",
-        "NAS",
-        "PNAS",
-        // "BUR",
-        // "NOD",
-        // "NODD",
-        "TCC",
-        "DIT",
+        "LOC", "AMW", "CBO", "FDP", "DAC", "WMC", "WOC", "NOA",
+        "NOM", "NOAM", "NOPA", "NAbsm", "NProtM", "NAS", "PNAS",
+        "TCC", "DIT",
       ];
 
       try {
         progress.report({ message: "Initializing parser...", increment: 10 });
-        await pause(500); // Simulate processing delay
+        await pause(500);
 
         progress.report({ message: "Parsing source code...", increment: 20 });
         await pause(500);
@@ -92,66 +71,14 @@ export async function analyzeCode(
         if (results) {
           vscode.window.showInformationMessage("Analysis is Finished.");
           servermetricsmanager.sendMetricsFile();
+
+          // Detect code smells and suggest AI fixes
+          detectAndSuggestFixes(document, results);
         } else {
           vscode.window.showInformationMessage(
-            "Error Occured While Analyzing."
+            "Error Occurred While Analyzing."
           );
         }
-
-        return results;
-      } finally {
-        isAnalyzing = false;
-      }
-    }
-  );
-}
-
-export async function AnalyzeSelctedCode(
-  document: vscode.TextDocument,
-  sourceCode: string
-): Promise<string> {
-  if (isAnalyzing) {
-    vscode.window.showInformationMessage(
-      "Analysis is already running. Please wait..."
-    );
-    return "Analysis in progress";
-  }
-
-  isAnalyzing = true;
-
-  return await vscode.window.withProgress(
-    {
-      location: vscode.ProgressLocation.Notification,
-      title: `Analyzing Selected code in ${document.languageId}`,
-      cancellable: false,
-    },
-    async (progress) => {
-      const parser =
-        document.languageId === "java" ? new javaParser() : new pythonParser();
-      parser.selectLanguage();
-
-      const rootNode = parser.parse(sourceCode);
-      const metricsToCalculate = vscode.workspace
-        .getConfiguration("codepure")
-        .get<string[]>("selectedMetrics", []);
-
-      try {
-        progress.report({ message: "Initializing parser...", increment: 10 });
-        await pause(500); // Simulate processing delay
-
-        progress.report({ message: "Parsing source code...", increment: 20 });
-        await pause(500);
-
-        const results = await calculateMetricsWithProgress(
-          document,
-          rootNode,
-          sourceCode,
-          document.languageId,
-          metricsToCalculate,
-          progress
-        );
-
-        servermetricsmanager.sendMetricsFile();
 
         return results;
       } finally {
@@ -185,9 +112,9 @@ async function calculateMetricsWithProgress(
       // Update progress
       progress.report({
         message: `Calculating ${metricName}...`,
-        increment: 70 / metrics.length, // Distribute remaining progress evenly
+        increment: 70 / metrics.length, 
       });
-      await pause(300); // Simulate delay for each metric
+      await pause(300); 
     }
   }
 
@@ -201,3 +128,81 @@ async function calculateMetricsWithProgress(
 
   return results.join("\n");
 }
+
+async function detectAndSuggestFixes(document: vscode.TextDocument, results: string) {
+  const diagnostics: vscode.Diagnostic[] = [];
+
+  if (results.includes("WMC") && results.includes("LOC")) {
+    const fullRange = new vscode.Range(
+      new vscode.Position(0, 0),
+      new vscode.Position(document.lineCount - 1, document.lineAt(document.lineCount - 1).text.length)
+    );
+
+    const diagnostic = new vscode.Diagnostic(
+      fullRange,
+      "Potential Brain Class detected. AI can suggest a fix.",
+      vscode.DiagnosticSeverity.Warning
+    );
+
+    diagnostic.code = "brainClass";
+    diagnostic.source = "CodePure";
+    diagnostics.push(diagnostic);
+  }
+
+  diagnosticCollection.set(document.uri, diagnostics);
+}
+
+vscode.languages.registerCodeActionsProvider("*", {
+  provideCodeActions(
+    document: vscode.TextDocument,
+    range: vscode.Range,
+    context: vscode.CodeActionContext,
+    token: vscode.CancellationToken
+  ) {
+    const actions: vscode.CodeAction[] = [];
+
+    for (const diagnostic of context.diagnostics) {
+      if (diagnostic.code === "brainClass") {
+        const fixAction = new vscode.CodeAction(
+          "CodePure: ✨ Apply AI Fix for Brain Class",
+          vscode.CodeActionKind.QuickFix
+        );
+
+        fixAction.command = {
+          command: "codepure.getAIFix",
+          title: "Apply AI Fix",
+          arguments: [document], 
+        };
+
+        fixAction.diagnostics = [diagnostic];
+        actions.push(fixAction);
+      }
+    }
+
+    return actions;
+  },
+});
+
+vscode.commands.registerCommand("codepure.getAIFix", async (document: vscode.TextDocument) => {
+  if (!document) return;
+
+  vscode.window.showInformationMessage("Fetching AI fix suggestion...");
+  const sourceCode = document.getText();
+  const issue = "Brain Class detected, suggest a fix.";
+  const fix = await getFixSuggestion(sourceCode, issue);
+
+  if (fix) {
+    const edit = new vscode.WorkspaceEdit();
+    const fullRange = new vscode.Range(
+      new vscode.Position(0, 0),
+      new vscode.Position(document.lineCount, 0)
+    );
+
+    edit.replace(document.uri, fullRange, fix);
+    await vscode.workspace.applyEdit(edit);
+    vscode.window.showInformationMessage("AI Fix applied!");
+  } else {
+    vscode.window.showWarningMessage("No AI fix suggestion available.");
+  }
+});
+

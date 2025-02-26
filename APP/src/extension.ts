@@ -20,6 +20,7 @@ export async function activate(context: vscode.ExtensionContext) {
     "codepureTreeView",
     customTreeProvider
   );
+  
 
   console.timeEnd("Extension Execution Time");
 }

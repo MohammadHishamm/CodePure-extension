@@ -1,6 +1,7 @@
 import * as vscode from "vscode";
 import { getSelectedMetrics } from "./utils";
 
+
 let isActive = true;
 
 export function registerCommands(context: vscode.ExtensionContext) {
@@ -44,6 +45,8 @@ export function registerCommands(context: vscode.ExtensionContext) {
   const openSettingsCommand = vscode.commands.registerCommand("codepure.openSettings", () => {
     vscode.commands.executeCommand("workbench.action.openSettings", "CodePure");
   });
+
+
 
   context.subscriptions.push(activateCommand, deactivateCommand, analyzeSelectedCodeCommand, openSettingsCommand);
 }
