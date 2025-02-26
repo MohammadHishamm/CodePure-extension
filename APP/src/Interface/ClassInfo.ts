@@ -15,4 +15,5 @@ export interface ClassInfo {
   genericParams?: string;
   hasConstructor?: boolean;
   parent?: string;  
+  nestedClassNames?:string[];
 }

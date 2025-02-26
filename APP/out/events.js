@@ -35,9 +35,9 @@ var __importStar = (this && this.__importStar) || (function () {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.handleEvents = handleEvents;
 const vscode = __importStar(require("vscode"));
-const ProblemsChecker_1 = require("./services/ProblemsChecker");
-const SupportedFileTypes_1 = require("./services/SupportedFileTypes");
-const AnalyzeCode_1 = require("./services/AnalyzeCode");
+const ProblemsChecker_1 = require("./Services/ProblemsChecker");
+const SupportedFileTypes_1 = require("./Services/SupportedFileTypes");
+const AnalyzeCode_1 = require("./Services/AnalyzeCode");
 function handleEvents(context) {
     vscode.workspace.onDidSaveTextDocument(async (document) => {
         const problemsChecker = new ProblemsChecker_1.ProblemsChecker(document);

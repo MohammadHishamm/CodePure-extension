@@ -15,25 +15,28 @@ class CompositeExtractor {
                 classNodes = interfaceNodes;
             }
             else {
-                console.warn(`No Data found in file: ${fileName}`);
+                console.warn(`No Class found in file: ${fileName}`);
                 return [];
             }
         }
-        const classextractor = new ClassExtractor_1.ClassExtractor();
-        const methodextractor = new MethodExtractor_1.MethodExtractor();
-        const fieldextractor = new FieldExtractor_1.FieldExtractor();
-        // Extract classes, methods, and fields
-        const classes = classextractor.extractClasses(rootNode);
-        const methods = methodextractor.extractMethods(rootNode, classes);
-        const fields = fieldextractor.extractFields(rootNode, methods);
-        // Map class nodes into ClassGroup objects
-        return classNodes.map((node) => ({
-            fileName: fileName,
-            name: node.childForFieldName("name")?.text ?? "Unknown",
-            classes: classes,
-            methods: methods,
-            fields: fields,
-        }));
+        const classExtractor = new ClassExtractor_1.ClassExtractor();
+        const methodExtractor = new MethodExtractor_1.MethodExtractor();
+        const fieldExtractor = new FieldExtractor_1.FieldExtractor();
+        // Extract all class info
+        const allClasses = classExtractor.extractClasses(rootNode);
+        // Extract methods and fields for the main class
+        const methods = methodExtractor.extractMethods(rootNode, allClasses);
+        const fields = fieldExtractor.extractFields(rootNode, methods);
+        // Return only the first class, with nested classes stored separately
+        return [
+            {
+                fileName: fileName,
+                name: allClasses[0].name ?? "Unknown", // Ensures it's always a string
+                classes: allClasses, // Store other classes in a nested array
+                methods: methods, // Only methods for the main class
+                fields: fields, // Only fields for the main class
+            },
+        ];
     }
 }
 exports.CompositeExtractor = CompositeExtractor;

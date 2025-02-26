@@ -63,49 +63,16 @@ export class ClassExtractor {
     return { extendedClass, implementedInterfaces };
   }
 
-  // Function to extract all class information
-  // private extractClassInfo(
-  //   classNodes: Parser.SyntaxNode[],
-  //   extendedClass: string | undefined,
-  //   implementedInterfaces: string[]
-  // ): ClassInfo[] {
-
-     
-  //   return classNodes.map((node) => {
-  //     const modifiers = this.extractModifiers(node);
-  //     const isAbstract = this.extractAbstract(node);
-  //     const AccessLevel = this.getAccessModifier(modifiers);
-  //     const annotations = this.extractAnnotations(node);
-  //     const isNested = this.isNestedClass(node);
-  //     const genericParams = this.extractGenericParams(node);
-  //     const hasConstructor = this.hasConstructor(node);
-  //     const bodyNode = node.childForFieldName("body");
-
-  //     return {
-  //       name: node.childForFieldName("name")?.text ?? "Unknown",
-  //       implementedInterfaces,
-  //       isAbstract: isAbstract,  
-  //       isFinal: modifiers.some((mod) => mod === "final"),
-  //       isInterface: node.type === "interface_declaration",
-  //       AccessLevel,
-  //       annotations,
-  //       startPosition: bodyNode?.startPosition ?? node.startPosition,
-  //       endPosition: bodyNode?.endPosition ?? node.endPosition,
-  //       parent: extendedClass,
-  //       isNested,
-  //       genericParams,
-  //       hasConstructor,
-  //     };
-  //   });
-  // }
-
   private extractClassInfo(
     classNodes: Parser.SyntaxNode[],
     extendedClass: string | undefined,
     implementedInterfaces: string[]
   ): ClassInfo {
 
-  
+    if (classNodes.length === 0) {
+      throw new Error("No class nodes provided.");
+    }
+
     const node = classNodes[0]; // Get the first class only
     const modifiers = this.extractModifiers(node);
     const isAbstract = this.extractAbstract(node);
@@ -116,6 +83,11 @@ export class ClassExtractor {
     const hasConstructor = this.hasConstructor(node);
     const bodyNode = node.childForFieldName("body");
   
+    const nestedClassNodes = classNodes.slice(1); // Get remaining classes
+    const nestedClassNames = nestedClassNodes.map(
+      (node) => node.childForFieldName("name")?.text ?? "Unknown"
+    );
+
     return {
         name: node.childForFieldName("name")?.text ?? "Unknown",
         implementedInterfaces,
@@ -130,6 +102,7 @@ export class ClassExtractor {
         isNested,
         genericParams,
         hasConstructor,
+        nestedClassNames,
     };
   }
   

@@ -36,7 +36,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.javaParser = exports.pythonParser = exports.statusBarItem = exports.outputChannel = exports.customTreeProvider = exports.metricsSaver = exports.metricsNotifier = exports.servermetricsmanager = exports.FECFcode = void 0;
 exports.initializeExtension = initializeExtension;
 const vscode = __importStar(require("vscode"));
-const ServerMetricsManager_1 = require("./services/ServerMetricsManager");
+const ServerMetricsManager_1 = require("./Services/ServerMetricsManager");
 const MetricsNotifier_1 = require("./Core/MetricsNotifier");
 const MetricsSaver_1 = require("./Saver/MetricsSaver");
 const dashboard_1 = require("./dashboard");
