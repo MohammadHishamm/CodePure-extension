@@ -1,5 +1,5 @@
 import * as vscode from "vscode";
-import { ServerMetricsManager } from "./services/ServerMetricsManager";
+import { ServerMetricsManager } from "./Services/ServerMetricsManager";
 import { MetricsNotifier } from "./Core/MetricsNotifier";
 import { MetricsSaver } from "./Saver/MetricsSaver";
 import { CustomTreeProvider } from "./dashboard";

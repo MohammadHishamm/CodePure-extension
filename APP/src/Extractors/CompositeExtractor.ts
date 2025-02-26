@@ -2,50 +2,49 @@ import Parser from "tree-sitter";
 
 import { ClassGroup } from "../Interface/ClassGroup";
 import { ClassExtractor } from "./ClassExtractor";
-import { MethodExtractor  } from "./MethodExtractor";
-import { FieldExtractor  } from "./FieldExtractor";
+import { MethodExtractor } from "./MethodExtractor";
+import { FieldExtractor } from "./FieldExtractor";
 
-export class CompositeExtractor
-{
+export class CompositeExtractor {
   public extractClassGroup(
     rootNode: Parser.SyntaxNode,
     fileName: string
   ): ClassGroup[] {
-
     // Extract class declarations
     let classNodes = rootNode.descendantsOfType("class_declaration");
     const interfaceNodes = rootNode.descendantsOfType("interface_declaration");
 
     // Handle cases where no classes are found
-    if (classNodes.length === 0) 
-    {
-      if (interfaceNodes.length !== 0)
-      {
-          classNodes = interfaceNodes;
-      }
-      else
-      {
-        console.warn(`No Data found in file: ${fileName}`);
+    if (classNodes.length === 0) {
+      if (interfaceNodes.length !== 0) {
+        classNodes = interfaceNodes;
+      } else {
+        console.warn(`No Class found in file: ${fileName}`);
         return [];
       }
     }
 
-    const classextractor = new ClassExtractor();
-    const methodextractor = new MethodExtractor();
-    const fieldextractor = new FieldExtractor();
+    const classExtractor = new ClassExtractor();
+    const methodExtractor = new MethodExtractor();
+    const fieldExtractor = new FieldExtractor();
 
-    // Extract classes, methods, and fields
-    const classes = classextractor.extractClasses(rootNode);
-    const methods = methodextractor.extractMethods(rootNode, classes);
-    const fields = fieldextractor.extractFields(rootNode, methods);
+    // Extract all class info
+    const allClasses = classExtractor.extractClasses(rootNode);
 
-    // Map class nodes into ClassGroup objects
-    return classNodes.map((node) => ({
-      fileName: fileName,
-      name: node.childForFieldName("name")?.text ?? "Unknown",
-      classes: classes,
-      methods: methods,
-      fields: fields,
-    }));
+
+    // Extract methods and fields for the main class
+    const methods = methodExtractor.extractMethods(rootNode, allClasses);
+    const fields = fieldExtractor.extractFields(rootNode, methods);
+
+    // Return only the first class, with nested classes stored separately
+    return [
+      {
+        fileName: fileName,
+        name: allClasses[0].name ?? "Unknown", // Ensures it's always a string
+        classes: allClasses, // Store other classes in a nested array
+        methods: methods, // Only methods for the main class
+        fields: fields, // Only fields for the main class
+      },
+    ];
   }
 }

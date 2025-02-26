@@ -1,11 +1,12 @@
 import Parser from "tree-sitter";
 
 export interface ClassInfo {
-  name: string;
+  name?: string;
   implementedInterfaces?: string[];
   isAbstract?: boolean;
   isFinal?: boolean;
   isInterface?: boolean;
+  AccessLevel?:string;
   modifiers?: string[];
   annotations?: string[];
   startPosition: Parser.Point;
