@@ -44,6 +44,63 @@ export class DashboardPanel {
     this._panel.webview.html = this._getHtmlForWebview();
   }
 
+  private _getHtmlForWebview(): string {
+    const metricsData = this._getMetricsData();
 
+    return `
+      <!DOCTYPE html>
+      <html lang="en">
+      <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+        <title>CodePure Dashboard</title>
+        <style>
+          body { font-family: Arial, sans-serif; padding: 20px; }
+          canvas { max-width: 100%; }
+          .chart-container { display: flex; justify-content: space-around; flex-wrap: wrap; }
+        </style>
+      </head>
+      <body>
+        <h1>CodePure Metrics Dashboard</h1>
+        <div class="chart-container">
+          <canvas id="metricsChart"></canvas>
+        </div>
+        <script>
+          const metricsData = ${JSON.stringify(metricsData)};
+          
+          if (metricsData && metricsData.metrics && metricsData.metrics.length > 0) {
+
+            const ctxMetrics = document.getElementById("metricsChart").getContext("2d");
+
+            new Chart(ctxMetrics, {
+              type: "bar",
+              data: {
+                labels: metricsData.metrics.map(m => m.name),
+                datasets: [{
+                  label: "Metric Values",
+                  data: metricsData.metrics.map(m => m.value),
+                  backgroundColor: "rgba(75, 192, 192, 0.2)",
+                  borderColor: "rgba(75, 192, 192, 1)",
+                  borderWidth: 1
+                }]
+              },
+              options: {
+                responsive: true,
+                scales: {
+                  y: { beginAtZero: true }
+                }
+              }
+            });
+          } else {
+            document.body.innerHTML += "<p>No metrics available</p>";
+          }
+        </script>
+      </body>
+      </html>
+    `;
+  }
+
+  
 
 }
