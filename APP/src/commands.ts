@@ -1,6 +1,6 @@
 import * as vscode from "vscode";
 import { getSelectedMetrics } from "./utils";
-
+import { DashboardPanel } from "./DashboardPanel";
 
 let isActive = true;
 
@@ -46,7 +46,10 @@ export function registerCommands(context: vscode.ExtensionContext) {
     vscode.commands.executeCommand("workbench.action.openSettings", "CodePure");
   });
 
+  const showDashboardCommand = vscode.commands.registerCommand("extension.showDashboard", () => {
+    DashboardPanel.show(context.extensionUri);
+  });
 
 
-  context.subscriptions.push(activateCommand, deactivateCommand, analyzeSelectedCodeCommand, openSettingsCommand);
+  context.subscriptions.push(activateCommand, deactivateCommand, analyzeSelectedCodeCommand, openSettingsCommand,showDashboardCommand);
 }
