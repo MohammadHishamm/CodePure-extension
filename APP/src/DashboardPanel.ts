@@ -101,6 +101,23 @@ export class DashboardPanel {
     `;
   }
 
-  
+  private _getMetricsData() {
+    const filePath = path.join(__dirname, "..", "src", "Results", "MetricsCalculated.json");
+    try {
+        if (!fs.existsSync(filePath)) {
+            console.error("Metrics file not found:", filePath);
+            return { metrics: [] };
+        }
+
+        const data = fs.readFileSync(filePath, "utf8");
+        const jsonData = JSON.parse(data);
+
+        // Ensure it's an array and return the first file's metrics
+        return jsonData.length > 0 ? jsonData[0] : { metrics: [] };
+    } catch (err) {
+        console.error("Error reading metrics file:", err);
+        return { metrics: [] };
+    }
+}
 
 }
