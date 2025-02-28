@@ -70,7 +70,8 @@
         "command": "codepure.getAIFix",
         "title": "CodePure: Apply AI Fix",
         "category": "CodePure"
-      },{
+      },
+      {
         "command": "extension.showDashboard",
         "title": "Show CodePure Dashboard"
       }

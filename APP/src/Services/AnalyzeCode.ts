@@ -8,7 +8,7 @@ import {
   javaParser,
 } from "../initialize";
 import { pause } from "../utils";
-import { getFixSuggestion } from "../Services/GoogleGemini_AI";
+import { getFixSuggestion } from "./GoogleGemini_AI";
 
 let isAnalyzing = false;
 const diagnosticCollection = vscode.languages.createDiagnosticCollection("codepure");
@@ -74,6 +74,9 @@ export async function analyzeCode(
 
           // Detect code smells and suggest AI fixes
           detectAndSuggestFixes(document, results);
+          highlightBrainClassContributors(document,diagnosticCollection);
+          findFieldDeclarationLines(document);
+          findExternalCouplingLines(document);
         } else {
           vscode.window.showInformationMessage(
             "Error Occurred While Analyzing."
@@ -206,3 +209,157 @@ vscode.commands.registerCommand("codepure.getAIFix", async (document: vscode.Tex
   }
 });
 
+const noaHighlightType = vscode.window.createTextEditorDecorationType({
+  backgroundColor: "rgba(255, 255, 0, 0.4)" // Yellow
+});
+
+const cboHighlightType = vscode.window.createTextEditorDecorationType({
+  backgroundColor: "rgba(255, 105, 180, 0.3)" // Pink
+});
+
+
+async function highlightBrainClassContributors(
+  document: vscode.TextDocument,
+  diagnosticCollection: vscode.DiagnosticCollection
+): Promise<void> {
+  const diagnostics: vscode.Diagnostic[] = [];
+  const noaRanges: vscode.Range[] = [];
+  const cboRanges: vscode.Range[] = [];
+  
+  // Find lines with field declarations (contributing to NOA)
+  const fieldLines = findFieldDeclarationLines(document);
+  
+  // Find lines with external dependencies (contributing to CBO)
+  const couplingLines = findExternalCouplingLines(document);
+  
+  // Create diagnostics and collect ranges for NOA
+  for (const line of fieldLines) {
+    const lineRange = new vscode.Range(
+      new vscode.Position(line, 0),
+      new vscode.Position(line, document.lineAt(line).text.length)
+    );
+
+    noaRanges.push(lineRange); // Collect range for highlighting
+    
+    const diagnostic = new vscode.Diagnostic(
+      lineRange,
+      "Field declaration contributing to high NOA (Number of Attributes)",
+      vscode.DiagnosticSeverity.Warning
+    );
+    
+    diagnostic.code = "brainClass.NOA";
+    diagnostic.source = "CodePure";
+    diagnostics.push(diagnostic);
+  }
+  
+  // Create diagnostics and collect ranges for CBO
+  for (const line of couplingLines) {
+    const lineRange = new vscode.Range(
+      new vscode.Position(line, 0),
+      new vscode.Position(line, document.lineAt(line).text.length)
+    );
+
+    cboRanges.push(lineRange); // Collect range for highlighting
+    
+    const diagnostic = new vscode.Diagnostic(
+      lineRange,
+      "External coupling contributing to high CBO (Coupling Between Objects)",
+      vscode.DiagnosticSeverity.Warning
+    );
+    
+    diagnostic.code = "brainClass.CBO";
+    diagnostic.source = "CodePure";
+    diagnostics.push(diagnostic);
+  }
+
+  // Set diagnostics for underlining & Problems panel
+  diagnosticCollection.set(document.uri, diagnostics);
+
+  // Apply decorations for selection-style highlighting
+  const editor = vscode.window.activeTextEditor;
+  if (editor && editor.document.uri.toString() === document.uri.toString()) {
+    editor.setDecorations(noaHighlightType, noaRanges);
+editor.setDecorations(cboHighlightType, cboRanges);
+  }
+}
+
+
+/**
+ * Finds lines in the document that contain field declarations
+ * which contribute to a high NOA (Number of Attributes)
+ */
+function findFieldDeclarationLines(document: vscode.TextDocument): number[] {
+  const fieldLines: number[] = [];
+  const text = document.getText();
+  const lines = text.split('\n');
+  
+  // Regular expressions for different programming languages
+  // These patterns will need to be adjusted based on the languages you support
+  const patterns = {
+    java: /^\s*(private|protected|public)?\s+\w+\s+\w+(\s*=.*)?\s*;/,
+    typescript: /^\s*(private|protected|public)?\s+\w+(\s*:\s*\w+)?(\s*=.*)?\s*;?/,
+    csharp: /^\s*(private|protected|public|internal)?\s+\w+\s+\w+(\s*=.*)?\s*;/,
+    // Add patterns for other languages as needed
+  };
+  
+  // Determine the language of the document
+  const languageId = document.languageId;
+  const pattern = patterns["java"] || patterns.java; // Default to Java pattern
+  
+  // Find field declarations
+  for (let i = 0; i < lines.length; i++) {
+    if (pattern.test(lines[i])) {
+      fieldLines.push(i);
+    }
+  }
+  
+  return fieldLines;
+}
+
+/**
+ * Finds lines in the document that show coupling to other objects
+ * which contribute to a high CBO (Coupling Between Objects)
+ */
+function findExternalCouplingLines(document: vscode.TextDocument): number[] {
+  const couplingLines: number[] = [];
+  const text = document.getText();
+  const lines = text.split('\n');
+  
+  // Find class name
+  const classNameMatch = /class\s+(\w+)/.exec(text);
+  const className = classNameMatch ? classNameMatch[1] : '';
+  
+  // Find imports and dependencies
+  const importPattern = /import\s+([^;]+);/g;
+  const imports: string[] = [];
+  let match;
+  while ((match = importPattern.exec(text)) !== null) {
+    imports.push(match[1].trim().split('.').pop()!); // Get the class name from import
+  }
+  
+  // Find external type usages and method calls
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    
+    // Skip import lines
+    if (line.trim().startsWith('import ')) {
+      continue;
+    }
+    
+    // Check for usage of imported types
+    const containsExternalType = imports.some(importName => {
+      const regex = new RegExp(`\\b${importName}\\b`);
+      return regex.test(line) && !line.includes(`class ${importName}`);
+    });
+    
+    // Check for method calls on other objects
+    const methodCallPattern = /\b\w+\.\w+\(/;
+    const containsMethodCall = methodCallPattern.test(line);
+    
+    if (containsExternalType || containsMethodCall) {
+      couplingLines.push(i);
+    }
+  }
+  
+  return couplingLines;
+}
