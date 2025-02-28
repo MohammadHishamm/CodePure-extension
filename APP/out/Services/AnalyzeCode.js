@@ -120,6 +120,12 @@ async function detectAndSuggestFixes(document, results) {
         diagnostic.code = "brainClass";
         diagnostic.source = "CodePure";
         diagnostics.push(diagnostic);
+        // Show notification with Quick AI Fix button
+        vscode.window.showInformationMessage("CodePure detected a Brain Class! Want to apply a Quick AI Fix?", "✨ Quick AI Fix").then((selection) => {
+            if (selection === "✨ Quick AI Fix") {
+                vscode.commands.executeCommand("codepure.getAIFix", document);
+            }
+        });
     }
     diagnosticCollection.set(document.uri, diagnostics);
 }
