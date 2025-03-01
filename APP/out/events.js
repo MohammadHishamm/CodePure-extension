@@ -35,21 +35,24 @@ var __importStar = (this && this.__importStar) || (function () {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.handleEvents = handleEvents;
 const vscode = __importStar(require("vscode"));
-const ProblemsChecker_1 = require("./Services/ProblemsChecker");
-const SupportedFileTypes_1 = require("./Services/SupportedFileTypes");
-const AnalyzeCode_1 = require("./Services/AnalyzeCode");
+const ProblemsChecker_1 = require("./services/ProblemsChecker");
+const SupportedFileTypes_1 = require("./services/SupportedFileTypes");
+const AnalyzeCode_1 = require("./services/AnalyzeCode");
 function handleEvents(context) {
     vscode.workspace.onDidSaveTextDocument(async (document) => {
         const problemsChecker = new ProblemsChecker_1.ProblemsChecker(document);
         const isSupportedfiletype = new SupportedFileTypes_1.isSupportedFileType(document);
-        if (!problemsChecker.checkForErrors() && isSupportedfiletype.isSupported()) {
+        if (!problemsChecker.checkForErrors() &&
+            isSupportedfiletype.isSupported()) {
             const sourceCode = document.getText();
             await (0, AnalyzeCode_1.analyzeCode)(document, sourceCode);
         }
     });
     vscode.workspace.onDidChangeConfiguration((event) => {
         if (event.affectsConfiguration("extension.selectedMetrics")) {
-            const updatedMetrics = vscode.workspace.getConfiguration("codepure").get("selectedMetrics", []);
+            const updatedMetrics = vscode.workspace
+                .getConfiguration("codepure")
+                .get("selectedMetrics", []);
             vscode.window.showInformationMessage(`Metrics updated: ${updatedMetrics.join(", ")}`);
         }
     });
