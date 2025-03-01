@@ -43,6 +43,10 @@
     },
     "commands": [
       {
+        "command": "codepure.provideFeedback",
+        "title": "Provide Feedback"
+      },
+      {
         "command": "extension.activateCommand",
         "title": "CodePure: Activate"
       },
@@ -113,6 +117,12 @@
           "command": "extension.analyzeSelectedCode",
           "when": "editorHasSelection",
           "group": "navigation"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "codepure.provideFeedback",
+          "when": "view == 'codepure.feedbackView'"
         }
       ]
     },

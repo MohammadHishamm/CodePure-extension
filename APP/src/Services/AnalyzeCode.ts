@@ -290,6 +290,7 @@ async function highlightBrainClassContributors(
   if (editor && editor.document.uri.toString() === document.uri.toString()) {
     editor.setDecorations(noaHighlightType, noaRanges);
 editor.setDecorations(cboHighlightType, cboRanges);
+
   }
 }
 

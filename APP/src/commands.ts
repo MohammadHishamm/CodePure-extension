@@ -1,6 +1,7 @@
 import * as vscode from "vscode";
 import { getSelectedMetrics } from "./utils";
 import { DashboardPanel } from "./DashboardPanel";
+import { provideFeedbackCommand } from "./FeedbackViewProvider";
 
 let isActive = true;
 
@@ -22,6 +23,14 @@ export function registerCommands(context: vscode.ExtensionContext) {
       vscode.window.showWarningMessage("CodePure is not active!");
     }
   });
+  
+  // Register the feedback command
+  const feedbackCommand = vscode.commands.registerCommand(
+    "codepure.provideFeedback", 
+    () => provideFeedbackCommand()
+  );
+  
+
 
   const analyzeSelectedCodeCommand = vscode.commands.registerCommand("extension.analyzeSelectedCode", async () => {
     const editor = vscode.window.activeTextEditor;
@@ -51,5 +60,5 @@ export function registerCommands(context: vscode.ExtensionContext) {
   });
 
 
-  context.subscriptions.push(activateCommand, deactivateCommand, analyzeSelectedCodeCommand, openSettingsCommand,showDashboardCommand);
+  context.subscriptions.push(activateCommand, deactivateCommand, analyzeSelectedCodeCommand, openSettingsCommand,showDashboardCommand,feedbackCommand);
 }

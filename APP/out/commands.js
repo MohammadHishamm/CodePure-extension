@@ -37,6 +37,7 @@ exports.registerCommands = registerCommands;
 const vscode = __importStar(require("vscode"));
 const utils_1 = require("./utils");
 const DashboardPanel_1 = require("./DashboardPanel");
+const FeedbackViewProvider_1 = require("./FeedbackViewProvider");
 let isActive = true;
 function registerCommands(context) {
     const activateCommand = vscode.commands.registerCommand("extension.activateCommand", () => {
@@ -57,6 +58,8 @@ function registerCommands(context) {
             vscode.window.showWarningMessage("CodePure is not active!");
         }
     });
+    // Register the feedback command
+    const feedbackCommand = vscode.commands.registerCommand("codepure.provideFeedback", () => (0, FeedbackViewProvider_1.provideFeedbackCommand)());
     const analyzeSelectedCodeCommand = vscode.commands.registerCommand("extension.analyzeSelectedCode", async () => {
         const editor = vscode.window.activeTextEditor;
         if (!editor) {
@@ -77,6 +80,6 @@ function registerCommands(context) {
     const showDashboardCommand = vscode.commands.registerCommand("extension.showDashboard", () => {
         DashboardPanel_1.DashboardPanel.show(context.extensionUri);
     });
-    context.subscriptions.push(activateCommand, deactivateCommand, analyzeSelectedCodeCommand, openSettingsCommand, showDashboardCommand);
+    context.subscriptions.push(activateCommand, deactivateCommand, analyzeSelectedCodeCommand, openSettingsCommand, showDashboardCommand, feedbackCommand);
 }
 //# sourceMappingURL=commands.js.map

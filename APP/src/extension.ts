@@ -2,6 +2,7 @@ import * as vscode from "vscode";
 import { initializeExtension, customTreeProvider  , FECFcode} from "./initialize";
 import { registerCommands } from "./commands";
 import { handleEvents } from "./events";
+import { FeedbackViewProvider } from "./FeedbackViewProvider";
 
 export async function activate(context: vscode.ExtensionContext) {
   console.time("Extension Execution Time");
@@ -20,8 +21,7 @@ export async function activate(context: vscode.ExtensionContext) {
     "codepureTreeView",
     customTreeProvider
   );
-  
-
+ 
   console.timeEnd("Extension Execution Time");
 }
 

@@ -102,10 +102,18 @@ export class CustomTreeProvider implements vscode.TreeDataProvider<TreeItem>, Ob
   }
 
   async getChildren(element?: TreeItem): Promise<TreeItem[]> {
+    // Create the Provide Feedback tree item with a command
+    const feedbackItem = new TreeItem("📝 Provide Feedback", [], vscode.TreeItemCollapsibleState.None);
+    feedbackItem.command = {
+      command: "codepure.provideFeedback",
+      title: "Provide Feedback",
+      tooltip: "Click to provide feedback"
+    };
     if (!element) {
       return Promise.resolve([
         new TreeItem("📊 Metrics Data", [], vscode.TreeItemCollapsibleState.Collapsed),
-        new TreeItem("📂 GitHub Repositories", [], vscode.TreeItemCollapsibleState.Collapsed)
+        new TreeItem("📂 GitHub Repositories", [], vscode.TreeItemCollapsibleState.Collapsed),
+        feedbackItem
       ]);
     }
 
