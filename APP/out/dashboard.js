@@ -42,62 +42,161 @@ class CustomTreeProvider {
     _onDidChangeTreeData = new vscode.EventEmitter();
     onDidChangeTreeData = this._onDidChangeTreeData.event;
     treeItems = [];
+    isAuthenticated = false;
     constructor() {
-        this.loadMetricsData();
-        // Register the "clearHistory" command
+        vscode.commands.registerCommand("extension.connectGitHub", this.authenticateWithGitHub, this);
         vscode.commands.registerCommand("extension.clearHistory", this.clearHistory, this);
+        this.checkAuthentication();
     }
-    loadMetricsData(metricsData = []) {
-        if (metricsData.length === 0) {
-            let filePath = path.join(__dirname, "..", "src", "Results", "MetricsCalculated.json");
-            filePath = filePath.replace(/out[\\\/]?/, "");
-            try {
-                const data = fs.readFileSync(filePath, "utf8");
-                if (data.length === 0) {
-                    console.log("No metrics to retrieve.");
-                    return;
-                }
-                metricsData = JSON.parse(data);
+    async checkAuthentication() {
+        try {
+            const session = await vscode.authentication.getSession("github", ["repo", "user"], { createIfNone: false });
+            this.isAuthenticated = !!session;
+            if (this.isAuthenticated) {
+                await this.loadMetricsData();
             }
-            catch (err) {
-                console.error("Error reading or parsing metrics file:", err);
+            else {
+                this.treeItems = [this.createSignInItem()];
             }
+            this._onDidChangeTreeData.fire();
         }
-        const allFilesItem = new TreeItem("ALL Files", []);
+        catch (error) {
+            console.error("Error checking GitHub authentication:", error);
+        }
+    }
+    createSignInItem() {
+        const signInItem = new TreeItem("Sign in to GitHub", [], vscode.TreeItemCollapsibleState.None);
+        signInItem.command = {
+            command: "extension.connectGitHub",
+            title: "Sign in to GitHub",
+            tooltip: "Click to authenticate with GitHub",
+        };
+        signInItem.iconPath = new vscode.ThemeIcon("sign-in");
+        return signInItem;
+    }
+    async loadMetricsData(metricsData = []) {
+        let filePath = path.join(__dirname, "..", "src", "Results", "MetricsCalculated.json");
+        filePath = filePath.replace(/out[\\\/]?/, "");
+        console.log(`Loading metrics from: ${filePath}`);
+        try {
+            if (!fs.existsSync(filePath)) {
+                console.error("Metrics file does not exist.");
+                return;
+            }
+            const data = fs.readFileSync(filePath, "utf8");
+            if (data.trim().length === 0) {
+                console.log("No metrics found in file.");
+                return;
+            }
+            metricsData = JSON.parse(data);
+        }
+        catch (err) {
+            console.error("Error reading or parsing metrics file:", err);
+            return;
+        }
+        if (metricsData.length === 0) {
+            console.log("No metrics data available.");
+            return;
+        }
         const fileItems = metricsData.map((item) => {
             const fileMetrics = item.metrics.map((metric) => new Metric_1.Metric(metric.name, metric.value));
-            return new TreeItem(item.folderName, fileMetrics);
+            return new TreeItem(item.folderName, fileMetrics, vscode.TreeItemCollapsibleState.Collapsed);
         });
-        allFilesItem.children = fileItems;
-        // Create Clear History icon and tooltip
-        const clearHistoryItem = new TreeItem("Clear History", [], vscode.TreeItemCollapsibleState.None);
+        const clearHistoryItem = new TreeItem("🗑️ Clear History", [], vscode.TreeItemCollapsibleState.None);
         clearHistoryItem.command = {
             command: "extension.clearHistory",
             title: "Clear History",
             tooltip: "Click to clear the metrics history",
         };
-        // Set the icon for the Clear History item
-        clearHistoryItem.iconPath = path.join(__dirname.replace(/out[\\\/]?/, ''), 'src', 'Assets', 'clearhistory.png');
-        // Add Clear History item as a child of ALL Files
-        allFilesItem.children?.push(clearHistoryItem);
-        this.treeItems = [allFilesItem];
+        this.treeItems = [...fileItems, clearHistoryItem];
         this._onDidChangeTreeData.fire();
     }
     update(metricsData) {
         console.log(`Observer notified: Metrics updated with ${metricsData.length} items.`);
         this.loadMetricsData(metricsData);
     }
-    getTreeItem(element) {
-        return element;
-    }
-    getChildren(element) {
+    async getChildren(element) {
         if (!element) {
+            return Promise.resolve([
+                new TreeItem("📊 Metrics Data", [], vscode.TreeItemCollapsibleState.Collapsed),
+                new TreeItem("📂 GitHub Repositories", [], vscode.TreeItemCollapsibleState.Collapsed)
+            ]);
+        }
+        if (element.label === "📊 Metrics Data") {
             return Promise.resolve(this.treeItems);
         }
-        if (element.label === "ALL Files") {
-            return Promise.resolve(element.children || []);
+        if (element.label === "📂 GitHub Repositories") {
+            return this.fetchRepositoriesTreeItems();
         }
-        return Promise.resolve(element.metrics.map((metric) => new TreeItem(`${metric.name}: ${metric.value}`, [])));
+        return Promise.resolve(element.children || []);
+    }
+    async fetchRepositoriesTreeItems() {
+        try {
+            const session = await vscode.authentication.getSession("github", ["repo", "user"], { createIfNone: false });
+            if (!session) {
+                vscode.window.showErrorMessage("No GitHub session found.");
+                return [this.createSignInItem()];
+            }
+            const accessToken = session.accessToken;
+            const response = await fetch("https://api.github.com/user/repos", {
+                headers: {
+                    Authorization: `Bearer ${accessToken}`,
+                    Accept: "application/vnd.github.v3+json",
+                },
+            });
+            if (!response.ok) {
+                throw new Error(`GitHub API error: ${response.statusText}`);
+            }
+            const repositories = (await response.json());
+            const currentRepo = await this.getCurrentRepository();
+            const repoItems = [];
+            if (currentRepo) {
+                const currentRepoItem = new TreeItem(`Current Repo: ${currentRepo}`, [], vscode.TreeItemCollapsibleState.None);
+                currentRepoItem.tooltip = "This is the repository currently open in VS Code.";
+                currentRepoItem.iconPath = new vscode.ThemeIcon("repo");
+                repoItems.push(currentRepoItem);
+            }
+            if (repositories.length === 0) {
+                const noRepoItem = new TreeItem("No repositories found", [], vscode.TreeItemCollapsibleState.None);
+                noRepoItem.tooltip = "You don't have any repositories on GitHub.";
+                noRepoItem.iconPath = new vscode.ThemeIcon("warning");
+                repoItems.push(noRepoItem);
+            }
+            else {
+                repoItems.push(...repositories.map(repo => new TreeItem(repo.name, [], vscode.TreeItemCollapsibleState.None)));
+            }
+            return repoItems;
+        }
+        catch (error) {
+            console.error("Error fetching repositories:", error);
+            return [new TreeItem("Error fetching repositories", [], vscode.TreeItemCollapsibleState.None)];
+        }
+    }
+    async getCurrentRepository() {
+        const workspaceFolders = vscode.workspace.workspaceFolders;
+        if (!workspaceFolders || workspaceFolders.length === 0) {
+            return null;
+        }
+        const workspacePath = workspaceFolders[0].uri.fsPath;
+        const gitFolderPath = path.join(workspacePath, ".git");
+        if (!fs.existsSync(gitFolderPath)) {
+            return null;
+        }
+        try {
+            const configPath = path.join(gitFolderPath, "config");
+            const configContent = fs.readFileSync(configPath, "utf8");
+            const match = configContent.match(/\[remote "origin"\]\s*url = https:\/\/github\.com\/([^\/]+)\/([^\.]+)\.git/);
+            if (match) {
+                return match[2];
+            }
+        }
+        catch (error) {
+            console.error("Error reading Git config:", error);
+        }
+        return null;
+    }
+    getTreeItem(element) {
+        return element;
     }
     clearHistory() {
         console.log("Clearing metrics history...");
@@ -113,6 +212,22 @@ class CustomTreeProvider {
             console.error("Error clearing metrics history file:", err);
         }
     }
+    async authenticateWithGitHub() {
+        try {
+            const session = await vscode.authentication.getSession("github", ["repo", "user"], { createIfNone: true });
+            if (!session) {
+                vscode.window.showErrorMessage("GitHub authentication failed or was cancelled.");
+                return;
+            }
+            console.log("GitHub authentication successful!");
+            this.isAuthenticated = true;
+            this._onDidChangeTreeData.fire(); // Refresh tree after authentication
+        }
+        catch (error) {
+            console.error("Error during GitHub authentication:", error);
+            vscode.window.showErrorMessage(`GitHub authentication error: ${error}`);
+        }
+    }
 }
 exports.CustomTreeProvider = CustomTreeProvider;
 class TreeItem extends vscode.TreeItem {
@@ -126,6 +241,10 @@ class TreeItem extends vscode.TreeItem {
         this.tooltip = `${label}`;
         this.description = metrics.length > 0 ? `${metrics.length} metrics` : "";
         this.contextValue = metrics.length > 0 ? "fileWithMetrics" : "file";
+        // **Ensure metrics appear as children in the tree**
+        if (metrics.length > 0) {
+            this.children = metrics.map(metric => new TreeItem(`${metric.name}: ${metric.value}`, [], vscode.TreeItemCollapsibleState.None));
+        }
     }
 }
 //# sourceMappingURL=dashboard.js.map

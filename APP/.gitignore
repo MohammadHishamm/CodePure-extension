@@ -49,4 +49,6 @@ doc/
 # Ignore OS-specific files
 Thumbs.db
 
+out/
+
 
