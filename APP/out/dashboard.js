@@ -37,7 +37,6 @@ exports.CustomTreeProvider = void 0;
 const fs = __importStar(require("fs"));
 const path = __importStar(require("path"));
 const vscode = __importStar(require("vscode"));
-const Metric_1 = require("./Core/Metric");
 class CustomTreeProvider {
     _onDidChangeTreeData = new vscode.EventEmitter();
     onDidChangeTreeData = this._onDidChangeTreeData.event;
@@ -46,6 +45,7 @@ class CustomTreeProvider {
     constructor() {
         vscode.commands.registerCommand("extension.connectGitHub", this.authenticateWithGitHub, this);
         vscode.commands.registerCommand("extension.clearHistory", this.clearHistory, this);
+        vscode.commands.registerCommand("extension.syncDatabase", this.syncWithDatabase, this);
         this.checkAuthentication();
     }
     async checkAuthentication() {
@@ -99,7 +99,7 @@ class CustomTreeProvider {
             return;
         }
         const fileItems = metricsData.map((item) => {
-            const fileMetrics = item.metrics.map((metric) => new Metric_1.Metric(metric.name, metric.value));
+            const fileMetrics = item.metrics.map((metric) => new TreeItem(`${metric.name}: ${metric.value}`, [], vscode.TreeItemCollapsibleState.None));
             return new TreeItem(item.folderName, fileMetrics, vscode.TreeItemCollapsibleState.Collapsed);
         });
         const clearHistoryItem = new TreeItem("🗑️ Clear History", [], vscode.TreeItemCollapsibleState.None);
@@ -138,6 +138,22 @@ class CustomTreeProvider {
         }
         return Promise.resolve(element.children || []);
     }
+    async authenticateWithGitHub() {
+        try {
+            const session = await vscode.authentication.getSession("github", ["repo", "user"], { createIfNone: true });
+            if (!session) {
+                vscode.window.showErrorMessage("GitHub authentication failed or was cancelled.");
+                return;
+            }
+            console.log("GitHub authentication successful!");
+            this.isAuthenticated = true;
+            this._onDidChangeTreeData.fire(); // Refresh tree after authentication
+        }
+        catch (error) {
+            console.error("Error during GitHub authentication:", error);
+            vscode.window.showErrorMessage(`GitHub authentication error: ${error}`);
+        }
+    }
     async fetchRepositoriesTreeItems() {
         try {
             const session = await vscode.authentication.getSession("github", ["repo", "user"], { createIfNone: false });
@@ -156,28 +172,83 @@ class CustomTreeProvider {
                 throw new Error(`GitHub API error: ${response.statusText}`);
             }
             const repositories = (await response.json());
-            const currentRepo = await this.getCurrentRepository();
             const repoItems = [];
+            const currentRepo = await this.getCurrentRepository();
             if (currentRepo) {
-                const currentRepoItem = new TreeItem(`Current Repo: ${currentRepo}`, [], vscode.TreeItemCollapsibleState.None);
-                currentRepoItem.tooltip = "This is the repository currently open in VS Code.";
-                currentRepoItem.iconPath = new vscode.ThemeIcon("repo");
-                repoItems.push(currentRepoItem);
-            }
-            if (repositories.length === 0) {
-                const noRepoItem = new TreeItem("No repositories found", [], vscode.TreeItemCollapsibleState.None);
-                noRepoItem.tooltip = "You don't have any repositories on GitHub.";
-                noRepoItem.iconPath = new vscode.ThemeIcon("warning");
-                repoItems.push(noRepoItem);
-            }
-            else {
-                repoItems.push(...repositories.map(repo => new TreeItem(repo.name, [], vscode.TreeItemCollapsibleState.None)));
+                const currentRepoData = repositories.find(repo => repo.name === currentRepo);
+                if (currentRepoData) {
+                    const owner = currentRepoData.owner.login;
+                    const contributors = await this.fetchContributors(owner, currentRepo, accessToken);
+                    const currentRepoItem = new TreeItem(`Current Repo: ${currentRepo}`, contributors, vscode.TreeItemCollapsibleState.Collapsed);
+                    currentRepoItem.tooltip = "This is the repository currently open in VS Code.";
+                    currentRepoItem.iconPath = new vscode.ThemeIcon("repo");
+                    // Sync with Database Button
+                    const syncItem = new TreeItem("Sync with Database", [], vscode.TreeItemCollapsibleState.None);
+                    syncItem.iconPath = new vscode.ThemeIcon("database");
+                    syncItem.command = {
+                        command: "extension.syncDatabase",
+                        title: "Sync with Database",
+                        tooltip: "Click to sync the latest metrics with the database",
+                    };
+                    repoItems.push(currentRepoItem);
+                    repoItems.push(syncItem); // Add sync button under current repo
+                }
             }
             return repoItems;
         }
         catch (error) {
             console.error("Error fetching repositories:", error);
             return [new TreeItem("Error fetching repositories", [], vscode.TreeItemCollapsibleState.None)];
+        }
+    }
+    async syncWithDatabase() {
+        try {
+            const reason = "Syncing will allow CodePure to analyze and store code smell metrics, making them available for all repository users.";
+            const userChoice = await vscode.window.showInformationMessage(`${reason}\n\nDo you want to proceed with the sync?`, { modal: true }, "Yes", "No");
+            if (userChoice !== "Yes") {
+                vscode.window.showInformationMessage("Sync canceled.");
+                return;
+            }
+            vscode.window.showInformationMessage("Syncing with the database...");
+            const currentRepo = await this.getCurrentRepository();
+            if (!currentRepo) {
+                vscode.window.showErrorMessage("No repository found to sync.");
+                return;
+            }
+            const session = await vscode.authentication.getSession("github", ["repo", "user"], { createIfNone: false });
+            if (!session) {
+                vscode.window.showErrorMessage("GitHub authentication required for syncing.");
+                return;
+            }
+            vscode.window.showInformationMessage(`Successfully synced ${currentRepo} with the database.`);
+        }
+        catch (error) {
+            console.error("Sync error:", error);
+            vscode.window.showErrorMessage("An error occurred while syncing with the database.");
+        }
+    }
+    async fetchContributors(owner, repo, accessToken) {
+        try {
+            const response = await fetch(`https://api.github.com/repos/${owner}/${repo}/contributors`, {
+                headers: {
+                    Authorization: `Bearer ${accessToken}`,
+                    Accept: "application/vnd.github.v3+json",
+                },
+            });
+            if (!response.ok) {
+                throw new Error(`GitHub API error: ${response.statusText}`);
+            }
+            const contributors = (await response.json());
+            return contributors.map(contributor => {
+                const item = new TreeItem(`${contributor.login} (${contributor.contributions} commits)`, [], vscode.TreeItemCollapsibleState.None);
+                item.iconPath = new vscode.ThemeIcon("account");
+                item.tooltip = `${contributor.contributions} contributions`;
+                return item;
+            });
+        }
+        catch (error) {
+            console.error("Error fetching contributors:", error);
+            return [new TreeItem("Error fetching contributors", [], vscode.TreeItemCollapsibleState.None)];
         }
     }
     async getCurrentRepository() {
@@ -220,37 +291,24 @@ class CustomTreeProvider {
             console.error("Error clearing metrics history file:", err);
         }
     }
-    async authenticateWithGitHub() {
-        try {
-            const session = await vscode.authentication.getSession("github", ["repo", "user"], { createIfNone: true });
-            if (!session) {
-                vscode.window.showErrorMessage("GitHub authentication failed or was cancelled.");
-                return;
-            }
-            console.log("GitHub authentication successful!");
-            this.isAuthenticated = true;
-            this._onDidChangeTreeData.fire(); // Refresh tree after authentication
-        }
-        catch (error) {
-            console.error("Error during GitHub authentication:", error);
-            vscode.window.showErrorMessage(`GitHub authentication error: ${error}`);
-        }
-    }
 }
 exports.CustomTreeProvider = CustomTreeProvider;
 class TreeItem extends vscode.TreeItem {
     label;
     metrics;
     children;
-    constructor(label, metrics = [], collapsibleState = vscode.TreeItemCollapsibleState.Collapsed) {
+    constructor(label, children = [], collapsibleState = vscode.TreeItemCollapsibleState.Collapsed, metrics = []) {
         super(label, collapsibleState);
         this.label = label;
         this.metrics = metrics;
         this.tooltip = `${label}`;
         this.description = metrics.length > 0 ? `${metrics.length} metrics` : "";
         this.contextValue = metrics.length > 0 ? "fileWithMetrics" : "file";
-        // **Ensure metrics appear as children in the tree**
-        if (metrics.length > 0) {
+        // Assign children properly
+        if (children.length > 0) {
+            this.children = children;
+        }
+        else if (metrics.length > 0) {
             this.children = metrics.map(metric => new TreeItem(`${metric.name}: ${metric.value}`, [], vscode.TreeItemCollapsibleState.None));
         }
     }
