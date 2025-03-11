@@ -143,18 +143,26 @@ class CustomTreeProvider {
             title: "Provide Feedback",
             tooltip: "Click to provide feedback"
         };
-        const ViewReport = new TreeItem_1.TreeItem("📈 View Project Report", [], vscode.TreeItemCollapsibleState.None);
-        ViewReport.command = {
+        const viewReportItem = new TreeItem_1.TreeItem("📈 View Project Report", [], vscode.TreeItemCollapsibleState.None);
+        viewReportItem.command = {
             command: "extension.showDashboard",
             title: "View Project Report",
-            tooltip: "Click to View the report"
+            tooltip: "Click to view the report"
+        };
+        const helpItem = new TreeItem_1.TreeItem("Need Help ?", [], vscode.TreeItemCollapsibleState.None);
+        helpItem.command = {
+            command: "vscode.open",
+            title: "Open Help Page",
+            tooltip: "Click to get help",
+            arguments: ["https://codepure-vs.vercel.app/doc.html"]
         };
         if (!element) {
             return Promise.resolve([
                 new TreeItem_1.TreeItem("📊 Metrics Data", [], vscode.TreeItemCollapsibleState.Collapsed),
                 new TreeItem_1.TreeItem("📂 Current GitHub Repository", [], vscode.TreeItemCollapsibleState.Collapsed),
                 feedbackItem,
-                ViewReport
+                viewReportItem,
+                helpItem
             ]);
         }
         if (element.label === "📊 Metrics Data") {

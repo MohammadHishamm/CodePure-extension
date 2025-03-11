@@ -137,11 +137,19 @@ export class CustomTreeProvider implements vscode.TreeDataProvider<TreeItem>, Ob
       tooltip: "Click to provide feedback"
     };
 
-    const ViewReport = new TreeItem("📈 View Project Report", [], vscode.TreeItemCollapsibleState.None);
-    ViewReport.command = {
+    const viewReportItem = new TreeItem("📈 View Project Report", [], vscode.TreeItemCollapsibleState.None);
+    viewReportItem.command = {
       command: "extension.showDashboard",
       title: "View Project Report",
-      tooltip: "Click to View the report"
+      tooltip: "Click to view the report"
+    };
+
+    const helpItem = new TreeItem("Need Help ?", [], vscode.TreeItemCollapsibleState.None);
+    helpItem.command = {
+      command: "vscode.open",
+      title: "Open Help Page",
+      tooltip: "Click to get help",
+      arguments: ["https://codepure-vs.vercel.app/doc.html"]
     };
 
     if (!element) {
@@ -149,7 +157,8 @@ export class CustomTreeProvider implements vscode.TreeDataProvider<TreeItem>, Ob
         new TreeItem("📊 Metrics Data", [], vscode.TreeItemCollapsibleState.Collapsed),
         new TreeItem("📂 Current GitHub Repository", [], vscode.TreeItemCollapsibleState.Collapsed),
         feedbackItem,
-        ViewReport
+        viewReportItem,
+        helpItem
       ]);
     }
 
@@ -162,7 +171,8 @@ export class CustomTreeProvider implements vscode.TreeDataProvider<TreeItem>, Ob
     }
 
     return Promise.resolve(element.children || []);
-  }
+}
+
 
   async syncWithDatabase(owner: string) {
     try {
