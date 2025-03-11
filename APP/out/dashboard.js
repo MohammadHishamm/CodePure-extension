@@ -112,14 +112,19 @@ class CustomTreeProvider {
                 return [new TreeItem_1.TreeItem("No metrics to fetch", [], vscode.TreeItemCollapsibleState.None)];
             }
             const metricItems = metricsData.map((item) => {
-                const fileUri = vscode.Uri.file(item.fullPath); // Ensure item.fullPath contains the absolute path
+                const fileUri = vscode.Uri.file(item.fullPath);
                 const fileMetrics = item.metrics.map((metric) => new TreeItem_1.TreeItem(`${metric.name}: ${metric.value}`, [], vscode.TreeItemCollapsibleState.None));
-                const folderItem = new TreeItem_1.TreeItem(`${item.folderName}`, fileMetrics, vscode.TreeItemCollapsibleState.Collapsed);
+                // Make the folder name clickable like a link
+                const folderItem = new TreeItem_1.TreeItem(item.folderName, fileMetrics, vscode.TreeItemCollapsibleState.Collapsed);
+                folderItem.resourceUri = fileUri; // This makes VS Code format it as a link
+                // Markdown tooltip with a clickable command
+                folderItem.tooltip = new vscode.MarkdownString(`[🔗 Click to open ${item.folderName}](command:vscode.open?${encodeURIComponent(JSON.stringify([fileUri.toString()]))})`);
+                folderItem.tooltip.isTrusted = true;
+                // Set a command to open the file
                 folderItem.command = {
                     command: "vscode.open",
                     title: `Open ${item.folderName}`,
-                    tooltip: `Click to open ${item.fullPath}`,
-                    arguments: [fileUri] // Pass the file path to open
+                    arguments: [fileUri]
                 };
                 return folderItem;
             });
