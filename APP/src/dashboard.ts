@@ -16,9 +16,12 @@ export class CustomTreeProvider implements vscode.TreeDataProvider<TreeItem>, Ob
 
   constructor() {
     this.GithubApi = new GitHubAPI();
+
     vscode.commands.registerCommand("extension.connectGitHub", this.authenticateWithGitHub, this);
     vscode.commands.registerCommand("extension.clearHistory", this.clearHistory, this);
     vscode.commands.registerCommand("extension.syncDatabase", this.syncWithDatabase, this);
+
+
     this.checkAuthentication();
   }
 
@@ -133,11 +136,20 @@ export class CustomTreeProvider implements vscode.TreeDataProvider<TreeItem>, Ob
       title: "Provide Feedback",
       tooltip: "Click to provide feedback"
     };
+
+    const ViewReport = new TreeItem("📈 View Project Report", [], vscode.TreeItemCollapsibleState.None);
+    ViewReport.command = {
+      command: "extension.showDashboard",
+      title: "View Project Report",
+      tooltip: "Click to View the report"
+    };
+
     if (!element) {
       return Promise.resolve([
         new TreeItem("📊 Metrics Data", [], vscode.TreeItemCollapsibleState.Collapsed),
         new TreeItem("📂 Current GitHub Repository", [], vscode.TreeItemCollapsibleState.Collapsed),
-        feedbackItem
+        feedbackItem,
+        ViewReport
       ]);
     }
 

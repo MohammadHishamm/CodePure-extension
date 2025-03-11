@@ -36,7 +36,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.registerCommands = registerCommands;
 const vscode = __importStar(require("vscode"));
 const utils_1 = require("./utils");
-const DashboardPanel_1 = require("./DashboardPanel");
+const ViewProjectReport_1 = require("./ViewProjectReport");
 const FeedbackViewProvider_1 = require("./FeedbackViewProvider");
 let isActive = true;
 function registerCommands(context) {
@@ -78,7 +78,7 @@ function registerCommands(context) {
         vscode.commands.executeCommand("workbench.action.openSettings", "CodePure");
     });
     const showDashboardCommand = vscode.commands.registerCommand("extension.showDashboard", () => {
-        DashboardPanel_1.DashboardPanel.show(context.extensionUri);
+        ViewProjectReport_1.DashboardPanel.show(context.extensionUri);
     });
     context.subscriptions.push(activateCommand, deactivateCommand, analyzeSelectedCodeCommand, openSettingsCommand, showDashboardCommand, feedbackCommand);
 }

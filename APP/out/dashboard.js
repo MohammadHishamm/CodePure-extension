@@ -143,11 +143,18 @@ class CustomTreeProvider {
             title: "Provide Feedback",
             tooltip: "Click to provide feedback"
         };
+        const ViewReport = new TreeItem_1.TreeItem("📈 View Project Report", [], vscode.TreeItemCollapsibleState.None);
+        ViewReport.command = {
+            command: "extension.showDashboard",
+            title: "View Project Report",
+            tooltip: "Click to View the report"
+        };
         if (!element) {
             return Promise.resolve([
                 new TreeItem_1.TreeItem("📊 Metrics Data", [], vscode.TreeItemCollapsibleState.Collapsed),
                 new TreeItem_1.TreeItem("📂 Current GitHub Repository", [], vscode.TreeItemCollapsibleState.Collapsed),
-                feedbackItem
+                feedbackItem,
+                ViewReport
             ]);
         }
         if (element.label === "📊 Metrics Data") {

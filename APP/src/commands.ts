@@ -1,6 +1,6 @@
 import * as vscode from "vscode";
 import { getSelectedMetrics } from "./utils";
-import { DashboardPanel } from "./DashboardPanel";
+import { DashboardPanel } from "./ViewProjectReport";
 import { provideFeedbackCommand } from "./FeedbackViewProvider";
 
 let isActive = true;
