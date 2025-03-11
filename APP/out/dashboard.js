@@ -238,6 +238,11 @@ class CustomTreeProvider {
     }
     async fetchContributors(owner, repo, accessToken) {
         try {
+            const session = await vscode.authentication.getSession("github", ["repo", "user"], { createIfNone: false });
+            let currentUser = "";
+            if (session) {
+                currentUser = session.account.label; // Get the authenticated GitHub username
+            }
             const response = await fetch(`https://api.github.com/repos/${owner}/${repo}/contributors`, {
                 headers: {
                     Authorization: `Bearer ${accessToken}`,
@@ -252,13 +257,16 @@ class CustomTreeProvider {
                 return [new TreeItem("No contributors found.", [], vscode.TreeItemCollapsibleState.None)];
             }
             return contributors.map(contributor => {
-                // Determine if the contributor is the repository owner
                 const isOwner = contributor.login === owner;
-                const displayName = isOwner ? ` ${contributor.login}` : contributor.login;
+                const isCurrentUser = contributor.login === currentUser;
+                let displayName = contributor.login;
+                if (isCurrentUser) {
+                    displayName = " (Me) " + displayName;
+                }
                 // Assign proper icon: "star" for the owner, "account" for others
-                const item = new TreeItem(`${displayName} (${contributor.contributions} commits)`, [], vscode.TreeItemCollapsibleState.None);
+                const item = new TreeItem(`${displayName} - ${contributor.contributions} commits`, [], vscode.TreeItemCollapsibleState.None);
                 item.iconPath = new vscode.ThemeIcon(isOwner ? "star" : "account");
-                item.tooltip = `${contributor.contributions} Commits ${isOwner ? " (Owner )" : ""}`;
+                item.tooltip = `${contributor.contributions} commits${isOwner ? " (Owner)" : ""}${isCurrentUser ? " (You)" : ""}`;
                 return item;
             });
         }

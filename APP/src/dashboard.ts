@@ -259,6 +259,13 @@ async syncWithDatabase(owner: string) {
 
 private async fetchContributors(owner: string, repo: string, accessToken: string): Promise<TreeItem[]> {
   try {
+      const session = await vscode.authentication.getSession("github", ["repo", "user"], { createIfNone: false });
+      let currentUser = "";
+
+      if (session) {
+          currentUser = session.account.label; // Get the authenticated GitHub username
+      }
+
       const response = await fetch(`https://api.github.com/repos/${owner}/${repo}/contributors`, {
           headers: {
               Authorization: `Bearer ${accessToken}`,
@@ -270,30 +277,35 @@ private async fetchContributors(owner: string, repo: string, accessToken: string
           throw new Error(`GitHub API error: ${response.statusText}`);
       }
 
-      const contributors = (await response.json()) as { login: string, contributions: number }[];
+      const contributors = (await response.json()) as { login: string; contributions: number }[];
 
       if (contributors.length === 0) {
           return [new TreeItem("No contributors found.", [], vscode.TreeItemCollapsibleState.None)];
       }
 
       return contributors.map(contributor => {
-        // Determine if the contributor is the repository owner
-        const isOwner = contributor.login === owner;
-        const displayName = isOwner ? ` ${contributor.login}` : contributor.login;
-    
-        // Assign proper icon: "star" for the owner, "account" for others
-        const item = new TreeItem(`${displayName} (${contributor.contributions} commits)`, [], vscode.TreeItemCollapsibleState.None);
-        item.iconPath = new vscode.ThemeIcon(isOwner ? "star" : "account");
-        item.tooltip = `${contributor.contributions} Commits ${isOwner ? " (Owner )" : ""}`;
-    
-        return item;
-    });
-    
+          const isOwner = contributor.login === owner;
+          const isCurrentUser = contributor.login === currentUser;
+
+          let displayName = contributor.login;
+          if (isCurrentUser) {
+              displayName = " (Me) " + displayName;
+          }
+
+          // Assign proper icon: "star" for the owner, "account" for others
+          const item = new TreeItem(`${displayName} - ${contributor.contributions} commits`, [], vscode.TreeItemCollapsibleState.None);
+          item.iconPath = new vscode.ThemeIcon(isOwner ? "star" : "account");
+          item.tooltip = `${contributor.contributions} commits${isOwner ? " (Owner)" : ""}${isCurrentUser ? " (You)" : ""}`;
+
+          return item;
+      });
+
   } catch (error) {
       console.error("Error fetching contributors:", error);
       return [new TreeItem("Error fetching contributors.", [], vscode.TreeItemCollapsibleState.None)];
   }
 }
+
 
 
 
