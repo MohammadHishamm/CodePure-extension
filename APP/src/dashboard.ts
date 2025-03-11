@@ -78,47 +78,60 @@ export class CustomTreeProvider implements vscode.TreeDataProvider<TreeItem>, Ob
     console.log(`Fetching metrics from: ${filePath}`);
 
     if (!fs.existsSync(filePath)) {
-      console.error("Metrics file does not exist.");
-      return [new TreeItem("No metrics to fetch", [], vscode.TreeItemCollapsibleState.None)];
+        console.error("Metrics file does not exist.");
+        return [new TreeItem("No metrics to fetch", [], vscode.TreeItemCollapsibleState.None)];
     }
 
     try {
-      const data = fs.readFileSync(filePath, "utf8");
+        const data = fs.readFileSync(filePath, "utf8");
 
-      if (data.trim().length === 0) {
-        console.log("No metrics found in file.");
-        return [new TreeItem("No metrics to fetch", [], vscode.TreeItemCollapsibleState.None)];
-      }
+        if (data.trim().length === 0) {
+            console.log("No metrics found in file.");
+            return [new TreeItem("No metrics to fetch", [], vscode.TreeItemCollapsibleState.None)];
+        }
 
-      const metricsData: MetricsFileFormat[] = JSON.parse(data);
+        const metricsData: MetricsFileFormat[] = JSON.parse(data);
 
-      if (metricsData.length === 0) {
-        console.log("No metrics data available.");
-        return [new TreeItem("No metrics to fetch", [], vscode.TreeItemCollapsibleState.None)];
-      }
+        if (metricsData.length === 0) {
+            console.log("No metrics data available.");
+            return [new TreeItem("No metrics to fetch", [], vscode.TreeItemCollapsibleState.None)];
+        }
 
-      // Creating Tree Items for metrics
-      const metricItems = metricsData.map((item) => {
-        const fileMetrics = item.metrics.map(
-          (metric) => new TreeItem(`${metric.name}: ${metric.value}`, [], vscode.TreeItemCollapsibleState.None)
-        );
-        return new TreeItem(item.folderName, fileMetrics, vscode.TreeItemCollapsibleState.Collapsed);
+        const metricItems = metricsData.map((item) => {
+          const fileUri = vscode.Uri.file(item.fullPath); // Ensure item.fullPath contains the absolute path
+      
+          const fileMetrics = item.metrics.map(
+              (metric) => new TreeItem(`${metric.name}: ${metric.value}`, [], vscode.TreeItemCollapsibleState.None)
+          );
+      
+          const folderItem = new TreeItem(`${item.folderName}`, fileMetrics, vscode.TreeItemCollapsibleState.Collapsed);
+          
+          folderItem.command = {
+              command: "vscode.open",
+              title: `Open ${item.folderName}`,
+              tooltip: `Click to open ${item.fullPath}`,
+              arguments: [fileUri] // Pass the file path to open
+          };
+      
+          return folderItem;
       });
+      
 
-      const clearHistoryItem = new TreeItem("🗑️ Clear All History", [], vscode.TreeItemCollapsibleState.None);
-      clearHistoryItem.command = {
-        command: "extension.clearHistory",
-        title: "Clear All History",
-        tooltip: "Click to clear the metrics history",
-      };
+        const clearHistoryItem = new TreeItem("🗑️ Clear All History", [], vscode.TreeItemCollapsibleState.None);
+        clearHistoryItem.command = {
+            command: "extension.clearHistory",
+            title: "Clear All History",
+            tooltip: "Click to clear the metrics history",
+        };
 
-      return [...metricItems, clearHistoryItem];
+        return [...metricItems, clearHistoryItem];
 
     } catch (err) {
-      console.error("Error reading or parsing metrics file:", err);
-      return [new TreeItem("Error fetching metrics", [], vscode.TreeItemCollapsibleState.None)];
+        console.error("Error reading or parsing metrics file:", err);
+        return [new TreeItem("Error fetching metrics", [], vscode.TreeItemCollapsibleState.None)];
     }
-  }
+}
+
 
 
   update(metricsData: MetricsFileFormat[]): void {

@@ -111,10 +111,17 @@ class CustomTreeProvider {
                 console.log("No metrics data available.");
                 return [new TreeItem_1.TreeItem("No metrics to fetch", [], vscode.TreeItemCollapsibleState.None)];
             }
-            // Creating Tree Items for metrics
             const metricItems = metricsData.map((item) => {
+                const fileUri = vscode.Uri.file(item.fullPath); // Ensure item.fullPath contains the absolute path
                 const fileMetrics = item.metrics.map((metric) => new TreeItem_1.TreeItem(`${metric.name}: ${metric.value}`, [], vscode.TreeItemCollapsibleState.None));
-                return new TreeItem_1.TreeItem(item.folderName, fileMetrics, vscode.TreeItemCollapsibleState.Collapsed);
+                const folderItem = new TreeItem_1.TreeItem(`${item.folderName}`, fileMetrics, vscode.TreeItemCollapsibleState.Collapsed);
+                folderItem.command = {
+                    command: "vscode.open",
+                    title: `Open ${item.folderName}`,
+                    tooltip: `Click to open ${item.fullPath}`,
+                    arguments: [fileUri] // Pass the file path to open
+                };
+                return folderItem;
             });
             const clearHistoryItem = new TreeItem_1.TreeItem("🗑️ Clear All History", [], vscode.TreeItemCollapsibleState.None);
             clearHistoryItem.command = {
