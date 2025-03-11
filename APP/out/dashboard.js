@@ -37,12 +37,16 @@ exports.CustomTreeProvider = void 0;
 const fs = __importStar(require("fs"));
 const path = __importStar(require("path"));
 const vscode = __importStar(require("vscode"));
+const TreeItem_1 = require("./TreeItem");
+const GithubAPI_1 = require("./services/GithubAPI");
 class CustomTreeProvider {
     _onDidChangeTreeData = new vscode.EventEmitter();
     onDidChangeTreeData = this._onDidChangeTreeData.event;
     treeItems = [];
     isAuthenticated = false;
+    GithubApi;
     constructor() {
+        this.GithubApi = new GithubAPI_1.GitHubAPI();
         vscode.commands.registerCommand("extension.connectGitHub", this.authenticateWithGitHub, this);
         vscode.commands.registerCommand("extension.clearHistory", this.clearHistory, this);
         vscode.commands.registerCommand("extension.syncDatabase", this.syncWithDatabase, this);
@@ -52,91 +56,15 @@ class CustomTreeProvider {
         try {
             const session = await vscode.authentication.getSession("github", ["repo", "user"], { createIfNone: false });
             this.isAuthenticated = !!session;
-            if (this.isAuthenticated) {
-                await this.loadMetricsData();
-            }
-            else {
+            if (!this.isAuthenticated) {
                 this.treeItems = [this.createSignInItem()];
             }
-            this._onDidChangeTreeData.fire();
+            console.log("GithubAPI: isAuthenticated");
+            this.refresh();
         }
         catch (error) {
             console.error("Error checking GitHub authentication:", error);
         }
-    }
-    createSignInItem() {
-        const signInItem = new TreeItem("Sign in to GitHub", [], vscode.TreeItemCollapsibleState.None);
-        signInItem.command = {
-            command: "extension.connectGitHub",
-            title: "Sign in to GitHub",
-            tooltip: "Click to authenticate with GitHub",
-        };
-        signInItem.iconPath = new vscode.ThemeIcon("sign-in");
-        return signInItem;
-    }
-    async loadMetricsData(metricsData = []) {
-        let filePath = path.join(__dirname, "..", "src", "Results", "MetricsCalculated.json");
-        filePath = filePath.replace(/out[\\\/]?/, "");
-        console.log(`Loading metrics from: ${filePath}`);
-        try {
-            if (!fs.existsSync(filePath)) {
-                console.error("Metrics file does not exist.");
-                return;
-            }
-            const data = fs.readFileSync(filePath, "utf8");
-            if (data.trim().length === 0) {
-                console.log("No metrics found in file.");
-                return;
-            }
-            metricsData = JSON.parse(data);
-        }
-        catch (err) {
-            console.error("Error reading or parsing metrics file:", err);
-            return;
-        }
-        if (metricsData.length === 0) {
-            console.log("No metrics data available.");
-            return;
-        }
-        const fileItems = metricsData.map((item) => {
-            const fileMetrics = item.metrics.map((metric) => new TreeItem(`${metric.name}: ${metric.value}`, [], vscode.TreeItemCollapsibleState.None));
-            return new TreeItem(item.folderName, fileMetrics, vscode.TreeItemCollapsibleState.Collapsed);
-        });
-        const clearHistoryItem = new TreeItem("🗑️ Clear History", [], vscode.TreeItemCollapsibleState.None);
-        clearHistoryItem.command = {
-            command: "extension.clearHistory",
-            title: "Clear History",
-            tooltip: "Click to clear the metrics history",
-        };
-        this.treeItems = [...fileItems, clearHistoryItem];
-        this._onDidChangeTreeData.fire();
-    }
-    update(metricsData) {
-        console.log(`Observer notified: Metrics updated with ${metricsData.length} items.`);
-        this.loadMetricsData(metricsData);
-    }
-    async getChildren(element) {
-        // Create the Provide Feedback tree item with a command
-        const feedbackItem = new TreeItem("📝 Provide Feedback", [], vscode.TreeItemCollapsibleState.None);
-        feedbackItem.command = {
-            command: "codepure.provideFeedback",
-            title: "Provide Feedback",
-            tooltip: "Click to provide feedback"
-        };
-        if (!element) {
-            return Promise.resolve([
-                new TreeItem("📊 Metrics Data", [], vscode.TreeItemCollapsibleState.Collapsed),
-                new TreeItem("📂 Current GitHub Repository", [], vscode.TreeItemCollapsibleState.Collapsed),
-                feedbackItem
-            ]);
-        }
-        if (element.label === "📊 Metrics Data") {
-            return Promise.resolve(this.treeItems);
-        }
-        if (element.label === "📂 Current GitHub Repository") {
-            return this.fetchRepositoriesTreeItems();
-        }
-        return Promise.resolve(element.children || []);
     }
     async authenticateWithGitHub() {
         try {
@@ -147,63 +75,88 @@ class CustomTreeProvider {
             }
             console.log("GitHub authentication successful!");
             this.isAuthenticated = true;
-            this._onDidChangeTreeData.fire();
+            this.refresh();
         }
         catch (error) {
             console.error("Error during GitHub authentication:", error);
             vscode.window.showErrorMessage(`GitHub authentication error: ${error}`);
         }
     }
-    async fetchRepositoriesTreeItems() {
+    createSignInItem() {
+        const signInItem = new TreeItem_1.TreeItem("Sign in to GitHub", [], vscode.TreeItemCollapsibleState.None);
+        signInItem.command = {
+            command: "extension.connectGitHub",
+            title: "Sign in to GitHub",
+            tooltip: "Click to authenticate with GitHub",
+        };
+        signInItem.iconPath = new vscode.ThemeIcon("sign-in");
+        return signInItem;
+    }
+    async fetchMetricsData() {
+        let filePath = path.join(__dirname, "..", "src", "Results", "MetricsCalculated.json");
+        filePath = filePath.replace(/out[\\\/]?/, "");
+        console.log(`Fetching metrics from: ${filePath}`);
+        if (!fs.existsSync(filePath)) {
+            console.error("Metrics file does not exist.");
+            return [new TreeItem_1.TreeItem("No metrics to fetch", [], vscode.TreeItemCollapsibleState.None)];
+        }
         try {
-            const session = await vscode.authentication.getSession("github", ["repo", "user"], { createIfNone: false });
-            if (!session) {
-                vscode.window.showErrorMessage("No GitHub session found.");
-                return [this.createSignInItem()];
+            const data = fs.readFileSync(filePath, "utf8");
+            if (data.trim().length === 0) {
+                console.log("No metrics found in file.");
+                return [new TreeItem_1.TreeItem("No metrics to fetch", [], vscode.TreeItemCollapsibleState.None)];
             }
-            const accessToken = session.accessToken;
-            const response = await fetch("https://api.github.com/user/repos", {
-                headers: {
-                    Authorization: `Bearer ${accessToken}`,
-                    Accept: "application/vnd.github.v3+json",
-                },
+            const metricsData = JSON.parse(data);
+            if (metricsData.length === 0) {
+                console.log("No metrics data available.");
+                return [new TreeItem_1.TreeItem("No metrics to fetch", [], vscode.TreeItemCollapsibleState.None)];
+            }
+            // Creating Tree Items for metrics
+            const metricItems = metricsData.map((item) => {
+                const fileMetrics = item.metrics.map((metric) => new TreeItem_1.TreeItem(`${metric.name}: ${metric.value}`, [], vscode.TreeItemCollapsibleState.None));
+                return new TreeItem_1.TreeItem(item.folderName, fileMetrics, vscode.TreeItemCollapsibleState.Collapsed);
             });
-            if (!response.ok) {
-                throw new Error(`GitHub API error: ${response.statusText}`);
-            }
-            const repositories = (await response.json());
-            const repoItems = [];
-            const currentRepo = await this.getCurrentRepository();
-            if (currentRepo) {
-                const currentRepoData = repositories.find(repo => repo.name === currentRepo);
-                if (currentRepoData) {
-                    const owner = currentRepoData.owner.login;
-                    const contributors = await this.fetchContributors(owner, currentRepo, accessToken);
-                    const currentRepoItem = new TreeItem(`${currentRepo} Info`, contributors, vscode.TreeItemCollapsibleState.Collapsed);
-                    currentRepoItem.tooltip = `Owner: ${owner}`;
-                    currentRepoItem.iconPath = new vscode.ThemeIcon("repo");
-                    // Sync with Database Button
-                    const syncItem = new TreeItem("Sync with Database", [], vscode.TreeItemCollapsibleState.None);
-                    syncItem.iconPath = new vscode.ThemeIcon("database");
-                    syncItem.command = {
-                        command: "extension.syncDatabase",
-                        title: "Sync with Database",
-                        tooltip: "Click to sync the latest metrics with the database",
-                        arguments: [owner]
-                    };
-                    repoItems.push(currentRepoItem);
-                    repoItems.push(syncItem);
-                }
-            }
-            else {
-                repoItems.push(new TreeItem("This project isn't connected with a GitHub repository.", [], vscode.TreeItemCollapsibleState.None));
-            }
-            return repoItems;
+            const clearHistoryItem = new TreeItem_1.TreeItem("🗑️ Clear All History", [], vscode.TreeItemCollapsibleState.None);
+            clearHistoryItem.command = {
+                command: "extension.clearHistory",
+                title: "Clear All History",
+                tooltip: "Click to clear the metrics history",
+            };
+            return [...metricItems, clearHistoryItem];
         }
-        catch (error) {
-            console.error("Error fetching repositories:", error);
-            return [new TreeItem("Error fetching repositories", [], vscode.TreeItemCollapsibleState.None)];
+        catch (err) {
+            console.error("Error reading or parsing metrics file:", err);
+            return [new TreeItem_1.TreeItem("Error fetching metrics", [], vscode.TreeItemCollapsibleState.None)];
         }
+    }
+    update(metricsData) {
+        console.log(`Observer notified: Metrics updated with ${metricsData.length} items.`);
+        this.fetchMetricsData().then((items) => {
+            this.treeItems = items;
+            this.refresh();
+        });
+    }
+    async getChildren(element) {
+        const feedbackItem = new TreeItem_1.TreeItem("📝 Provide Feedback", [], vscode.TreeItemCollapsibleState.None);
+        feedbackItem.command = {
+            command: "codepure.provideFeedback",
+            title: "Provide Feedback",
+            tooltip: "Click to provide feedback"
+        };
+        if (!element) {
+            return Promise.resolve([
+                new TreeItem_1.TreeItem("📊 Metrics Data", [], vscode.TreeItemCollapsibleState.Collapsed),
+                new TreeItem_1.TreeItem("📂 Current GitHub Repository", [], vscode.TreeItemCollapsibleState.Collapsed),
+                feedbackItem
+            ]);
+        }
+        if (element.label === "📊 Metrics Data") {
+            return this.fetchMetricsData();
+        }
+        if (element.label === "📂 Current GitHub Repository") {
+            return this.GithubApi.fetchRepositoriesTreeItems();
+        }
+        return Promise.resolve(element.children || []);
     }
     async syncWithDatabase(owner) {
         try {
@@ -224,7 +177,7 @@ class CustomTreeProvider {
                 return;
             }
             vscode.window.showInformationMessage("Syncing with the database...");
-            const currentRepo = await this.getCurrentRepository();
+            const currentRepo = await this.GithubApi.getCurrentRepository();
             if (!currentRepo) {
                 vscode.window.showErrorMessage("No repository found to sync.");
                 return;
@@ -236,105 +189,33 @@ class CustomTreeProvider {
             vscode.window.showErrorMessage("An error occurred while syncing with the database.");
         }
     }
-    async fetchContributors(owner, repo, accessToken) {
-        try {
-            const session = await vscode.authentication.getSession("github", ["repo", "user"], { createIfNone: false });
-            let currentUser = "";
-            if (session) {
-                currentUser = session.account.label; // Get the authenticated GitHub username
-            }
-            const response = await fetch(`https://api.github.com/repos/${owner}/${repo}/contributors`, {
-                headers: {
-                    Authorization: `Bearer ${accessToken}`,
-                    Accept: "application/vnd.github.v3+json",
-                },
-            });
-            if (!response.ok) {
-                throw new Error(`GitHub API error: ${response.statusText}`);
-            }
-            const contributors = (await response.json());
-            if (contributors.length === 0) {
-                return [new TreeItem("No contributors found.", [], vscode.TreeItemCollapsibleState.None)];
-            }
-            return contributors.map(contributor => {
-                const isOwner = contributor.login === owner;
-                const isCurrentUser = contributor.login === currentUser;
-                let displayName = contributor.login;
-                if (isCurrentUser) {
-                    displayName = " (Me) " + displayName;
-                }
-                // Assign proper icon: "star" for the owner, "account" for others
-                const item = new TreeItem(`${displayName} - ${contributor.contributions} commits`, [], vscode.TreeItemCollapsibleState.None);
-                item.iconPath = new vscode.ThemeIcon(isOwner ? "star" : "account");
-                item.tooltip = `${contributor.contributions} commits${isOwner ? " (Owner)" : ""}${isCurrentUser ? " (You)" : ""}`;
-                return item;
-            });
-        }
-        catch (error) {
-            console.error("Error fetching contributors:", error);
-            return [new TreeItem("Error fetching contributors.", [], vscode.TreeItemCollapsibleState.None)];
-        }
-    }
-    async getCurrentRepository() {
-        const workspaceFolders = vscode.workspace.workspaceFolders;
-        if (!workspaceFolders || workspaceFolders.length === 0) {
-            return null;
-        }
-        const workspacePath = workspaceFolders[0].uri.fsPath;
-        const gitFolderPath = path.join(workspacePath, ".git");
-        if (!fs.existsSync(gitFolderPath)) {
-            return null;
-        }
-        try {
-            const configPath = path.join(gitFolderPath, "config");
-            const configContent = fs.readFileSync(configPath, "utf8");
-            const match = configContent.match(/\[remote "origin"\]\s*url = https:\/\/github\.com\/([^\/]+)\/([^\.]+)\.git/);
-            if (match) {
-                return match[2];
-            }
-        }
-        catch (error) {
-            console.error("Error reading Git config:", error);
-        }
-        return null;
+    refresh() {
+        this._onDidChangeTreeData.fire();
     }
     getTreeItem(element) {
         return element;
     }
-    clearHistory() {
-        console.log("Clearing metrics history...");
+    async clearHistory() {
+        const reason = "Clearing history will remove all saved metrics from your project permanently.";
+        const userChoice = await vscode.window.showInformationMessage(`${reason}\n\nDo you want to proceed with clearing the history?`, { modal: true }, "Yes", "No");
+        if (userChoice !== "Yes") {
+            vscode.window.showInformationMessage("Metrics history was not cleared.");
+            return;
+        }
         let filePath = path.join(__dirname, "..", "src", "Results", "MetricsCalculated.json");
         filePath = filePath.replace(/out[\\\/]?/, "");
         try {
             fs.writeFileSync(filePath, JSON.stringify([]));
             console.log("Metrics history cleared.");
+            vscode.window.showInformationMessage("All metrics history has been cleared.");
             this.treeItems = [];
-            this._onDidChangeTreeData.fire();
+            this.refresh();
         }
         catch (err) {
             console.error("Error clearing metrics history file:", err);
+            vscode.window.showErrorMessage("Error clearing metrics history.");
         }
     }
 }
 exports.CustomTreeProvider = CustomTreeProvider;
-class TreeItem extends vscode.TreeItem {
-    label;
-    metrics;
-    children;
-    constructor(label, children = [], collapsibleState = vscode.TreeItemCollapsibleState.Collapsed, metrics = []) {
-        super(label, collapsibleState);
-        this.label = label;
-        this.metrics = metrics;
-        this.tooltip = `${label}`;
-        this.description = metrics.length > 0 ? `${metrics.length} metrics` : "";
-        this.contextValue = metrics.length > 0 ? "fileWithMetrics" : "file";
-        // Assign children properly
-        if (children.length > 0) {
-            this.children = children;
-        }
-        else if (metrics.length > 0) {
-            this.children = metrics.map(metric => new TreeItem(`${metric.name}: ${metric.value}`, [], vscode.TreeItemCollapsibleState.None));
-        }
-    }
-}
 //# sourceMappingURL=dashboard.js.map
