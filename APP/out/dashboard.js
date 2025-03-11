@@ -126,14 +126,14 @@ class CustomTreeProvider {
         if (!element) {
             return Promise.resolve([
                 new TreeItem("📊 Metrics Data", [], vscode.TreeItemCollapsibleState.Collapsed),
-                new TreeItem("📂 GitHub Repositories", [], vscode.TreeItemCollapsibleState.Collapsed),
+                new TreeItem("📂 Current GitHub Repository", [], vscode.TreeItemCollapsibleState.Collapsed),
                 feedbackItem
             ]);
         }
         if (element.label === "📊 Metrics Data") {
             return Promise.resolve(this.treeItems);
         }
-        if (element.label === "📂 GitHub Repositories") {
+        if (element.label === "📂 Current GitHub Repository") {
             return this.fetchRepositoriesTreeItems();
         }
         return Promise.resolve(element.children || []);
@@ -147,7 +147,7 @@ class CustomTreeProvider {
             }
             console.log("GitHub authentication successful!");
             this.isAuthenticated = true;
-            this._onDidChangeTreeData.fire(); // Refresh tree after authentication
+            this._onDidChangeTreeData.fire();
         }
         catch (error) {
             console.error("Error during GitHub authentication:", error);
@@ -191,8 +191,11 @@ class CustomTreeProvider {
                         tooltip: "Click to sync the latest metrics with the database",
                     };
                     repoItems.push(currentRepoItem);
-                    repoItems.push(syncItem); // Add sync button under current repo
+                    repoItems.push(syncItem);
                 }
+            }
+            else {
+                repoItems.push(new TreeItem("This project isn't connected with a github repository.", [], vscode.TreeItemCollapsibleState.None));
             }
             return repoItems;
         }
