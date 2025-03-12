@@ -2,7 +2,7 @@
 .DS_Store
 
 # Ignore the Results folder and its contents inside src
-src/Results/
+
 
 
 # Ignore node.js dependencies

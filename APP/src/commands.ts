@@ -2,6 +2,11 @@ import * as vscode from "vscode";
 import { getSelectedMetrics } from "./utils";
 import { DashboardPanel } from "./ViewProjectReport";
 import { provideFeedbackCommand } from "./FeedbackViewProvider";
+import { UMLDashboard } from "./ViewUML";
+
+import {
+  FECFcode
+} from "./initialize";
 
 let isActive = true;
 
@@ -59,6 +64,11 @@ export function registerCommands(context: vscode.ExtensionContext) {
     DashboardPanel.show(context.extensionUri);
   });
 
+  
+  const showUMLCommand = vscode.commands.registerCommand("extension.ViewUML", () => 
+  {
+    UMLDashboard.show(FECFcode.getAllParsedComponents());
+  });
 
-  context.subscriptions.push(activateCommand, deactivateCommand, analyzeSelectedCodeCommand, openSettingsCommand,showDashboardCommand,feedbackCommand);
+  context.subscriptions.push(activateCommand, showUMLCommand , deactivateCommand, analyzeSelectedCodeCommand, openSettingsCommand,showDashboardCommand,feedbackCommand);
 }

@@ -36,6 +36,7 @@
     "views": {
       "codepure": [
         {
+          "icon": "./src/Assets/codepure-logo.png",
           "id": "codepureTreeView",
           "name": ""
         }
@@ -69,6 +70,10 @@
       {
         "command": "extension.clearHistory",
         "title": "Clear History"
+      },
+      {
+        "command": "extension.ViewUML",
+        "title": "CodePure: View UML"
       },
       {
         "command": "codepure.getAIFix",

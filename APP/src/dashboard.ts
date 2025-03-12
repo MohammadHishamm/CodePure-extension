@@ -175,12 +175,21 @@ export class CustomTreeProvider implements vscode.TreeDataProvider<TreeItem>, Ob
       arguments: ["https://codepure-vs.vercel.app/doc.html"]
     };
 
+    
+    const viewUMLItem = new TreeItem("📜 View Project Class Diagram", [], vscode.TreeItemCollapsibleState.None);
+    viewUMLItem.command = {
+      command: "extension.ViewUML",
+      title: "View Project Class Diagram",
+      tooltip: "Click to view the Class Diagram"
+    };
+
     if (!element) {
       return Promise.resolve([
         new TreeItem("📊 Metrics Data", [], vscode.TreeItemCollapsibleState.Collapsed),
         new TreeItem("📂 Current GitHub Repository", [], vscode.TreeItemCollapsibleState.Collapsed),
-        feedbackItem,
+        viewUMLItem,
         viewReportItem,
+        feedbackItem,
         helpItem
       ]);
     }

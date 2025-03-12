@@ -38,6 +38,8 @@ const vscode = __importStar(require("vscode"));
 const utils_1 = require("./utils");
 const ViewProjectReport_1 = require("./ViewProjectReport");
 const FeedbackViewProvider_1 = require("./FeedbackViewProvider");
+const ViewUML_1 = require("./ViewUML");
+const initialize_1 = require("./initialize");
 let isActive = true;
 function registerCommands(context) {
     const activateCommand = vscode.commands.registerCommand("extension.activateCommand", () => {
@@ -80,6 +82,9 @@ function registerCommands(context) {
     const showDashboardCommand = vscode.commands.registerCommand("extension.showDashboard", () => {
         ViewProjectReport_1.DashboardPanel.show(context.extensionUri);
     });
-    context.subscriptions.push(activateCommand, deactivateCommand, analyzeSelectedCodeCommand, openSettingsCommand, showDashboardCommand, feedbackCommand);
+    const showUMLCommand = vscode.commands.registerCommand("extension.ViewUML", () => {
+        ViewUML_1.UMLDashboard.show(initialize_1.FECFcode.getAllParsedComponents());
+    });
+    context.subscriptions.push(activateCommand, showUMLCommand, deactivateCommand, analyzeSelectedCodeCommand, openSettingsCommand, showDashboardCommand, feedbackCommand);
 }
 //# sourceMappingURL=commands.js.map

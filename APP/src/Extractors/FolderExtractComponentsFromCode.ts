@@ -162,6 +162,49 @@ export class FolderExtractComponentsFromCode {
   }
 
 
+  public getAllParsedComponents(): FileParsedComponents {
+    try {
+        const resultsDir = path.join(__dirname, "..", "src", "ExtractedFileComponents").replace(/out[\\\/]?/, "");
+
+        if (!fs.existsSync(resultsDir)) {
+            console.error("ExtractedFileComponents directory does not exist:", resultsDir);
+            return { classes: [] };  // Return empty structure
+        }
+
+        const files = fs.readdirSync(resultsDir);
+        const allClasses: any[] = []; // Store all extracted classes
+
+        for (const file of files) {
+            const filePath = path.join(resultsDir, file);
+
+            if (!file.endsWith(".json")) continue;
+
+            const fileContent = fs.readFileSync(filePath, "utf8").trim();
+            if (!fileContent) {
+                console.warn(`Skipping empty file: ${filePath}`);
+                continue;
+            }
+
+            try {
+                const parsedComponent: FileParsedComponents = JSON.parse(fileContent);
+                
+                // Extract and merge all classes from each file into allClasses array
+                if (parsedComponent.classes && Array.isArray(parsedComponent.classes)) {
+                    allClasses.push(...parsedComponent.classes);
+                }
+            } catch (parseErr) {
+                console.error(`Error parsing JSON file: ${filePath}`, parseErr);
+            }
+        }
+
+        return { classes: allClasses };  // Return a single object with all classes merged
+    } catch (err) {
+        console.error("Failed to get all parsed components", err);
+        return { classes: [] }; // Return empty structure in case of failure
+    }
+}
+
+
 
   public async parseFile(fileUri: vscode.Uri): Promise<FileParsedComponents | null> {
     try {

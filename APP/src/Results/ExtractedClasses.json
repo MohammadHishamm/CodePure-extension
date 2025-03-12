@@ -1,0 +1,20 @@
+{
+  "nodes": [
+    { "data": { "id": "Animal", "label": "Abstract Animal" } },
+    { "data": { "id": "Animal.name", "label": "Field: name : String" } },
+    { "data": { "id": "Animal.age", "label": "Field: age : int" } },
+    { "data": { "id": "Animal.makeSound", "label": "Method: makeSound() : void" } },
+
+    { "data": { "id": "Dog", "label": "Dog" } },
+    { "data": { "id": "Dog.breed", "label": "Field: breed : String" } },
+    { "data": { "id": "Dog.bark", "label": "Method: bark() : void" } },
+
+    { "data": { "id": "Cat", "label": "Cat" } },
+    { "data": { "id": "Cat.meow", "label": "Method: meow() : void" } }
+  ],
+  "edges": [
+    { "data": { "source": "Animal", "target": "Dog", "label": "inherits" } },
+    { "data": { "source": "Animal", "target": "Cat", "label": "inherits" } },
+    { "data": { "source": "Dog", "target": "Cat", "label": "uses" } }
+  ]
+}
