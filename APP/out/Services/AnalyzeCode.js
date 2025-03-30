@@ -36,6 +36,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.analyzeCode = analyzeCode;
 const vscode = __importStar(require("vscode"));
 const MetricsFactory_1 = require("../Factory/MetricsFactory");
+const ServerMetricsManager_1 = require("./ServerMetricsManager"); // Ensure correct import path
 const initialize_1 = require("../initialize");
 const utils_1 = require("../utils");
 const GoogleGemini_AI_1 = require("./GoogleGemini_AI");
@@ -80,8 +81,9 @@ async function analyzeCode(document, sourceCode) {
                 // Detect code smells and suggest AI fixes
                 detectAndSuggestFixes(document, results);
                 // highlightBrainClassContributors(document,diagnosticCollection);
-                highlightDataClass(document, diagnosticCollection);
-                highlightGodClassContributors(document, diagnosticCollection);
+                // highlightDataClass(document,diagnosticCollection);
+                // highlightGodClassContributors(document,diagnosticCollection);
+                getModelPredictions(document, diagnosticCollection);
             }
             else {
                 vscode.window.showInformationMessage("Error Occurred While Analyzing.");
@@ -118,10 +120,14 @@ async function detectAndSuggestFixes(document, results) {
     const diagnostics = [];
     if (results.includes("WMC") && results.includes("LOC")) {
         const fullRange = new vscode.Range(new vscode.Position(0, 0), new vscode.Position(document.lineCount - 1, document.lineAt(document.lineCount - 1).text.length));
-        const diagnostic = new vscode.Diagnostic(fullRange, "Potential Brain Class detected. AI can suggest a fix.", vscode.DiagnosticSeverity.Warning);
-        diagnostic.code = "brainClass";
-        diagnostic.source = "CodePure";
-        diagnostics.push(diagnostic);
+        // const diagnostic = new vscode.Diagnostic(
+        //   fullRange,
+        //   "Potential Brain Class detected. AI can suggest a fix.",
+        //   vscode.DiagnosticSeverity.Warning
+        // );
+        // diagnostic.code = "brainClass";
+        // diagnostic.source = "CodePure";
+        // diagnostics.push(diagnostic);
         // Show notification with Quick AI Fix button
         vscode.window.showInformationMessage("CodePure detected a Brain Class! Want to apply a Quick AI Fix?", "✨ Quick AI Fix").then((selection) => {
             if (selection === "✨ Quick AI Fix") {
@@ -333,6 +339,37 @@ async function highlightGodClassContributors(document, diagnosticCollection) {
     if (editor && editor.document.uri.toString() === document.uri.toString()) {
         editor.setDecorations(wmcHighlightType, wmcRanges);
         editor.setDecorations(tccHighlightType, tccRanges);
+    }
+}
+async function getModelPredictions(document, diagnosticCollection) {
+    const serverManager = new ServerMetricsManager_1.ServerMetricsManager();
+    // Send metrics file and get response
+    const response = await serverManager.sendMetricsFile();
+    if (!response || !response.predictions || response.predictions.length === 0) {
+        console.log("No predictions received.");
+        return;
+    }
+    // Extract the first predictions object
+    const predictions = response.predictions[0];
+    // Check for each smell type and call the corresponding function if its value is 1
+    if (predictions["Brain Class"] === 1) {
+        console.log("Detected Brain Class");
+        highlightBrainClassContributors(document, diagnosticCollection);
+    }
+    if (predictions["Data Class"] === 1) {
+        console.log("Detected Data Class");
+        highlightDataClass(document, diagnosticCollection);
+    }
+    if (predictions["God Class"] === 1) {
+        console.log("Detected God Class");
+        highlightGodClassContributors(document, diagnosticCollection);
+    }
+    // If no smells were detected (all values were 0)
+    if (predictions["Brain Class"] === 0 &&
+        predictions["Data Class"] === 0 &&
+        predictions["God Class"] === 0 &&
+        predictions["Schizofrenic Class"] === 0) {
+        console.log("No code smells detected.");
     }
 }
 //# sourceMappingURL=AnalyzeCode.js.map
