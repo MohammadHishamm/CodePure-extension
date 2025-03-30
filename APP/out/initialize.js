@@ -44,7 +44,7 @@ const javaParser_1 = require("./Languages/javaParser");
 Object.defineProperty(exports, "javaParser", { enumerable: true, get: function () { return javaParser_1.javaParser; } });
 const pythonParser_1 = require("./Languages/pythonParser");
 Object.defineProperty(exports, "pythonParser", { enumerable: true, get: function () { return pythonParser_1.pythonParser; } });
-const ServerMetricsManager_1 = require("./services/ServerMetricsManager");
+const ServerMetricsManager_1 = require("./Services/ServerMetricsManager");
 exports.FECFcode = new FolderExtractComponentsFromCode_1.FolderExtractComponentsFromCode();
 exports.servermetricsmanager = new ServerMetricsManager_1.ServerMetricsManager();
 exports.metricsNotifier = new MetricsNotifier_1.MetricsNotifier();

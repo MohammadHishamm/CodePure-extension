@@ -38,7 +38,7 @@ const fs = __importStar(require("fs"));
 const path = __importStar(require("path"));
 const vscode = __importStar(require("vscode"));
 const TreeItem_1 = require("./TreeItem");
-const GithubAPI_1 = require("./services/GithubAPI");
+const GithubAPI_1 = require("./Services/GithubAPI");
 class CustomTreeProvider {
     _onDidChangeTreeData = new vscode.EventEmitter();
     onDidChangeTreeData = this._onDidChangeTreeData.event;

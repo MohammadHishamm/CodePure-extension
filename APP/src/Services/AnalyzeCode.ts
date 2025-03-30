@@ -9,6 +9,8 @@ import {
 } from "../initialize";
 import { pause } from "../utils";
 import { getFixSuggestion } from "./GoogleGemini_AI";
+import * as fs from 'fs';
+import * as path from 'path';
 
 let isAnalyzing = false;
 const diagnosticCollection = vscode.languages.createDiagnosticCollection("codepure");
@@ -74,9 +76,9 @@ export async function analyzeCode(
 
           // Detect code smells and suggest AI fixes
           detectAndSuggestFixes(document, results);
-          highlightBrainClassContributors(document,diagnosticCollection);
-          findFieldDeclarationLines(document);
-          findExternalCouplingLines(document);
+          // highlightBrainClassContributors(document,diagnosticCollection);
+          highlightDataClass(document,diagnosticCollection);
+         
         } else {
           vscode.window.showInformationMessage(
             "Error Occurred While Analyzing."
@@ -219,158 +221,198 @@ vscode.commands.registerCommand("codepure.getAIFix", async (document: vscode.Tex
   }
 });
 
-const noaHighlightType = vscode.window.createTextEditorDecorationType({
-  backgroundColor: "rgba(255, 255, 0, 0.4)" // Yellow
+// Define highlight styles
+const wmcHighlightType = vscode.window.createTextEditorDecorationType({
+  backgroundColor: "rgba(255, 255, 0, 0.4)" // Yellow for WMC
 });
 
-const cboHighlightType = vscode.window.createTextEditorDecorationType({
-  backgroundColor: "rgba(255, 105, 180, 0.3)" // Pink
+const locHighlightType = vscode.window.createTextEditorDecorationType({
+  backgroundColor: "rgba(255, 105, 180, 0.3)" // Pink for LOC
+});
+
+const noamHighlightType = vscode.window.createTextEditorDecorationType({
+  backgroundColor: "rgba(255, 105, 180, 0.3)" // Pink for NOAM (Accessors)
+});
+
+const wocHighlightType = vscode.window.createTextEditorDecorationType({
+  backgroundColor: "rgba(0, 255, 255, 0.4)" // Cyan for WOC
 });
 
 
+// Path to the JSON file
+const METRICS_FILE_PATH = "C:\\Users\\Mohammad\\OneDrive\\Documents\\MIU\\CodePure-extension\\APP\\src\\Results\\MetricsCalculated.json";
 async function highlightBrainClassContributors(
   document: vscode.TextDocument,
   diagnosticCollection: vscode.DiagnosticCollection
 ): Promise<void> {
+  if (!fs.existsSync(METRICS_FILE_PATH)) {
+    console.error("Metrics JSON file not found:", METRICS_FILE_PATH);
+    return;
+  }
+
+  const fileContent = fs.readFileSync(METRICS_FILE_PATH, 'utf-8');
+  const metricsData = JSON.parse(fileContent) as Array<{ fullPath: string; metrics: { name: string; value: number }[] }>;
+
+  // Find metrics for the current file
+  const fileMetrics = metricsData.find(entry => entry.fullPath === document.fileName);
+  if (!fileMetrics) {
+    console.warn("No metrics found for file:", document.fileName);
+    return;
+  }
+
+  // Extract LOC & WMC
+  const LOC = fileMetrics.metrics.find(m => m.name === "LOC")?.value || 0;
+  const WMC = fileMetrics.metrics.find(m => m.name === "WMC")?.value || 0;
+
+  console.log("File Path:", METRICS_FILE_PATH);
+console.log("File Content:", fileContent);
+console.log("Found Metrics:", fileMetrics);
+console.log(`Extracted LOC: ${LOC}, WMC: ${WMC}`);
+
   const diagnostics: vscode.Diagnostic[] = [];
-  const noaRanges: vscode.Range[] = [];
-  const cboRanges: vscode.Range[] = [];
-  
-  // Find lines with field declarations (contributing to NOA)
-  const fieldLines = findFieldDeclarationLines(document);
-  
-  // Find lines with external dependencies (contributing to CBO)
-  const couplingLines = findExternalCouplingLines(document);
-  
-  // Create diagnostics and collect ranges for NOA
-  for (const line of fieldLines) {
-    const lineRange = new vscode.Range(
-      new vscode.Position(line, 0),
-      new vscode.Position(line, document.lineAt(line).text.length)
+  const wmcRanges: vscode.Range[] = [];
+  const locRanges: vscode.Range[] = [];
+
+  // Apply highlighting rules
+  if (LOC >50) {
+    const classHeadRange = new vscode.Range(
+      new vscode.Position(0, 0),
+      new vscode.Position(0, document.lineAt(0).text.length)
     );
 
-    noaRanges.push(lineRange); // Collect range for highlighting
-    
-    const diagnostic = new vscode.Diagnostic(
-      lineRange,
-      "Field declaration contributing to high NOA (Number of Attributes)",
-      vscode.DiagnosticSeverity.Warning
-    );
-    
-    diagnostic.code = "brainClass.NOA";
-    diagnostic.source = "CodePure";
-    diagnostics.push(diagnostic);
-  }
-  
-  // Create diagnostics and collect ranges for CBO
-  for (const line of couplingLines) {
-    const lineRange = new vscode.Range(
-      new vscode.Position(line, 0),
-      new vscode.Position(line, document.lineAt(line).text.length)
-    );
+    locRanges.push(classHeadRange);
 
-    cboRanges.push(lineRange); // Collect range for highlighting
-    
     const diagnostic = new vscode.Diagnostic(
-      lineRange,
-      "External coupling contributing to high CBO (Coupling Between Objects)",
+      classHeadRange,
+      "Try to make lines more less (LOC > 351)",
       vscode.DiagnosticSeverity.Warning
     );
-    
-    diagnostic.code = "brainClass.CBO";
+    diagnostic.code = "brainClass.LOC";
     diagnostic.source = "CodePure";
     diagnostics.push(diagnostic);
   }
 
-  // Set diagnostics for underlining & Problems panel
+  if (WMC > 15) {
+    // Iterate over lines and find method headers to highlight
+    for (let i = 0; i < document.lineCount; i++) {
+      const lineText = document.lineAt(i).text.trim();
+      if (/^\s*(public|private|protected)?\s*\w+\s+\w+\s*\(.*\)\s*\{?/.test(lineText)) {
+        const functionRange = new vscode.Range(
+          new vscode.Position(i, 0),
+          new vscode.Position(i, lineText.length)
+        );
+
+        wmcRanges.push(functionRange);
+
+        const diagnostic = new vscode.Diagnostic(
+          functionRange,
+          "Complex method contributing to high WMC (> 87)",
+          vscode.DiagnosticSeverity.Warning
+        );
+        diagnostic.code = "brainClass.WMC";
+        diagnostic.source = "CodePure";
+        diagnostics.push(diagnostic);
+      }
+    }
+  }
+
+  // Apply decorations and diagnostics
   diagnosticCollection.set(document.uri, diagnostics);
 
-  // Apply decorations for selection-style highlighting
   const editor = vscode.window.activeTextEditor;
   if (editor && editor.document.uri.toString() === document.uri.toString()) {
-    editor.setDecorations(noaHighlightType, noaRanges);
-editor.setDecorations(cboHighlightType, cboRanges);
-
+    editor.setDecorations(wmcHighlightType, wmcRanges);
+    editor.setDecorations(locHighlightType, locRanges);
   }
 }
 
+  async function highlightDataClass(
+    document: vscode.TextDocument,
+    diagnosticCollection: vscode.DiagnosticCollection
+  ): Promise<void> {
+    if (!fs.existsSync(METRICS_FILE_PATH)) {
+      console.error("Metrics JSON file not found:", METRICS_FILE_PATH);
+      return;
+    }
+  
+    const fileContent = fs.readFileSync(METRICS_FILE_PATH, "utf-8");
+    const metricsData = JSON.parse(fileContent) as Array<{ fullPath: string; metrics: { name: string; value: number }[] }>;
+  
+    // Find metrics for the current file
+    const fileMetrics = metricsData.find(entry => entry.fullPath === document.fileName);
+    if (!fileMetrics) {
+      console.warn("No metrics found for file:", document.fileName);
+      return;
+    }
+  
+    // Extract required metrics
+    const WOC = fileMetrics.metrics.find(m => m.name === "WOC")?.value || 1; // Default to 1 to avoid false positives
+    const NOPA = fileMetrics.metrics.find(m => m.name === "NOPA")?.value || 0;
+    const NOAM = fileMetrics.metrics.find(m => m.name === "NOAM")?.value || 0;
+    const WMC = fileMetrics.metrics.find(m => m.name === "WMC")?.value || 100; // Default high to avoid false positives
+  
+    console.log(`Extracted WOC: ${WOC}, NOPA: ${NOPA}, NOAM: ${NOAM}, WMC: ${WMC}`);
+  
+    const diagnostics: vscode.Diagnostic[] = [];
+    const wmcRanges: vscode.Range[] = [];
+    const noamRanges: vscode.Range[] = [];
+    const wocRanges: vscode.Range[] = [];
+  
+    // Check Data Class conditions
+    if (WOC < 0.333 || (NOPA + NOAM) > 2 || WMC < 29) {
+      // Highlight class head for WOC
+      const classHeadRange = new vscode.Range(
+        new vscode.Position(0, 0),
+        new vscode.Position(0, document.lineAt(0).text.length)
+      );
+      wocRanges.push(classHeadRange);
+      diagnostics.push(new vscode.Diagnostic(
+        classHeadRange,
+        "Try to make the weight less (WOC < 0.333).",
+        vscode.DiagnosticSeverity.Warning
+      ));
+  
+      // Highlight method heads for WMC
+      for (let i = 0; i < document.lineCount; i++) {
+        const lineText = document.lineAt(i).text.trim();
+  
+        // Detect method heads (functions)
+        if (/^\s*(public|private|protected)?\s*\w+\s+\w+\s*\(.*\)\s*\{?/.test(lineText)) {
+          const functionRange = new vscode.Range(
+            new vscode.Position(i, 0),
+            new vscode.Position(i, lineText.length)
+          );
+  
+          if (WMC > 0) {
+            wmcRanges.push(functionRange);
+            diagnostics.push(new vscode.Diagnostic(
+              functionRange,
+              "Try to make complexity less in this function (WMC).",
+              vscode.DiagnosticSeverity.Warning
+            ));
+          }
+  
+          // Detect accessor methods (getters/setters)
+          if (/^\s*(public|protected)\s+\w+\s+(get|set)[A-Z]\w*\s*\(.*\)\s*\{?/.test(lineText)) {
+            noamRanges.push(functionRange);
+            diagnostics.push(new vscode.Diagnostic(
+              functionRange,
+              "Too much accessor methods (NOAM).",
+              vscode.DiagnosticSeverity.Warning
+            ));
+          }
+        }
+      }
+    }
+  
+    // Apply decorations and diagnostics
+    diagnosticCollection.set(document.uri, diagnostics);
+  
+    const editor = vscode.window.activeTextEditor;
+    if (editor && editor.document.uri.toString() === document.uri.toString()) {
+      editor.setDecorations(wmcHighlightType, wmcRanges);
+      editor.setDecorations(noamHighlightType, noamRanges);
+      editor.setDecorations(wocHighlightType, wocRanges);
+    }
 
-/**
- * Finds lines in the document that contain field declarations
- * which contribute to a high NOA (Number of Attributes)
- */
-function findFieldDeclarationLines(document: vscode.TextDocument): number[] {
-  const fieldLines: number[] = [];
-  const text = document.getText();
-  const lines = text.split('\n');
-  
-  // Regular expressions for different programming languages
-  // These patterns will need to be adjusted based on the languages you support
-  const patterns = {
-    java: /^\s*(private|protected|public)?\s+\w+\s+\w+(\s*=.*)?\s*;/,
-    typescript: /^\s*(private|protected|public)?\s+\w+(\s*:\s*\w+)?(\s*=.*)?\s*;?/,
-    csharp: /^\s*(private|protected|public|internal)?\s+\w+\s+\w+(\s*=.*)?\s*;/,
-    // Add patterns for other languages as needed
-  };
-  
-  // Determine the language of the document
-  const languageId = document.languageId;
-  const pattern = patterns["java"] || patterns.java; // Default to Java pattern
-  
-  // Find field declarations
-  for (let i = 0; i < lines.length; i++) {
-    if (pattern.test(lines[i])) {
-      fieldLines.push(i);
-    }
-  }
-  
-  return fieldLines;
-}
-
-/**
- * Finds lines in the document that show coupling to other objects
- * which contribute to a high CBO (Coupling Between Objects)
- */
-function findExternalCouplingLines(document: vscode.TextDocument): number[] {
-  const couplingLines: number[] = [];
-  const text = document.getText();
-  const lines = text.split('\n');
-  
-  // Find class name
-  const classNameMatch = /class\s+(\w+)/.exec(text);
-  const className = classNameMatch ? classNameMatch[1] : '';
-  
-  // Find imports and dependencies
-  const importPattern = /import\s+([^;]+);/g;
-  const imports: string[] = [];
-  let match;
-  while ((match = importPattern.exec(text)) !== null) {
-    imports.push(match[1].trim().split('.').pop()!); // Get the class name from import
-  }
-  
-  // Find external type usages and method calls
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i];
-    
-    // Skip import lines
-    if (line.trim().startsWith('import ')) {
-      continue;
-    }
-    
-    // Check for usage of imported types
-    const containsExternalType = imports.some(importName => {
-      const regex = new RegExp(`\\b${importName}\\b`);
-      return regex.test(line) && !line.includes(`class ${importName}`);
-    });
-    
-    // Check for method calls on other objects
-    const methodCallPattern = /\b\w+\.\w+\(/;
-    const containsMethodCall = methodCallPattern.test(line);
-    
-    if (containsExternalType || containsMethodCall) {
-      couplingLines.push(i);
-    }
-  }
-  
-  return couplingLines;
 }

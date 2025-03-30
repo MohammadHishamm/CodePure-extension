@@ -1,7 +1,7 @@
 import * as vscode from "vscode";
 import * as fs from "fs";
 import * as path from "path";
-import { UMLExtractor } from "./services/UMLExtractor";
+import { UMLExtractor } from "./Services/UMLExtractor";
 
 export class UMLDashboard {
   public static currentPanel: UMLDashboard | undefined;

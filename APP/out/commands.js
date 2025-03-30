@@ -82,7 +82,8 @@ function registerCommands(context) {
     const showDashboardCommand = vscode.commands.registerCommand("extension.showDashboard", () => {
         ViewProjectReport_1.DashboardPanel.show(context.extensionUri);
     });
-    const showUMLCommand = vscode.commands.registerCommand("extension.ViewUML", () => {
+    const showUMLCommand = vscode.commands.registerCommand("extension.ViewUML", async () => {
+        await initialize_1.FECFcode.parseAllJavaFiles();
         ViewUML_1.UMLDashboard.show(initialize_1.FECFcode.getAllParsedComponents());
     });
     context.subscriptions.push(activateCommand, showUMLCommand, deactivateCommand, analyzeSelectedCodeCommand, openSettingsCommand, showDashboardCommand, feedbackCommand);

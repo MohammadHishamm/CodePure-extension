@@ -2,7 +2,7 @@ import * as fs from "fs";
 import * as path from "path";
 import * as vscode from "vscode";
 import { TreeItem } from "./TreeItem";
-import { GitHubAPI } from "./services/GithubAPI";
+import { GitHubAPI } from "./Services/GithubAPI";
 import { Observer } from "./Core/MetricsObserver";
 import { MetricsFileFormat } from "./Interface/MetricsFileFormat";
 
