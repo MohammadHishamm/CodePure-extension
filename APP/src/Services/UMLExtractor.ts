@@ -6,8 +6,15 @@ interface NodeData {
   label: string;
 }
 
+interface EdgeData {
+  source: string;
+  target: string;
+  label: string;
+}
+
 interface UMLData {
   nodes: { data: NodeData }[];
+  edges: { data: EdgeData }[];
 }
 
 export class UMLExtractor {
@@ -17,9 +24,9 @@ export class UMLExtractor {
       return;
     }
 
-    console.log("✅ Extracting UML from:", JSON.stringify(classesData, null, 2));
 
-    const umlData: UMLData = { nodes: [] };
+    const umlData: UMLData = { nodes: [], edges: [] };
+    const classNames = new Set<string>();
 
     for (const classFile of classesData.classes) {
       if (!Array.isArray(classFile.classes)) {
@@ -33,21 +40,44 @@ export class UMLExtractor {
           continue;
         }
 
-        // Add class node
+        classNames.add(classInfo.name);
         const classLabel = `${classInfo.isAbstract ? "Abstract " : ""}${classInfo.isInterface ? "Interface " : ""}${classInfo.name}`;
         umlData.nodes.push({ data: { id: classInfo.name, label: classLabel } });
 
-        // Extract Fields
+        // Inheritance (extends)
+        if (classInfo.parent) {
+          umlData.edges.push({ data: { source: classInfo.parent, target: classInfo.name, label: "uses" } });
+        }
+
+        // Interface Implementation
+        if (classInfo.isInterface) {
+          umlData.nodes.push({ data: { id: classInfo.name, label: `Interface ${classInfo.name}` } });
+        }
+
+        if (Array.isArray(classInfo.implements)) {
+          for (const iface of classInfo.implements) {
+            umlData.edges.push({ data: { source: iface, target: classInfo.name, label: "implements" } });
+          }
+        }
+
+        // Fields (Associations)
         if (Array.isArray(classFile.fields)) {
           for (const field of classFile.fields) {
             const fieldLabel = `Field: ${field.name} : ${field.type || "unknown"}`;
             umlData.nodes.push({ data: { id: `${classInfo.name}.${field.name}`, label: fieldLabel } });
+            if (field.type && classNames.has(field.type)) {
+              umlData.edges.push({ data: { source: classInfo.name, target: field.type, label: "has" } });
+            }
           }
         }
 
-        // Extract Methods
-        if (Array.isArray(classInfo.methods)) {
-          for (const method of classInfo.methods) {
+        // Methods
+        if (Array.isArray(classFile.methods)) {
+          for (const method of classFile.methods) {
+
+            if (method.returnType == "No_Type") {
+               method.returnType = "void";
+            }
             const methodLabel = `Method: ${method.name}(${method.params?.join(", ") || ""}) : ${method.returnType}`;
             umlData.nodes.push({ data: { id: `${classInfo.name}.${method.name}`, label: methodLabel } });
           }
