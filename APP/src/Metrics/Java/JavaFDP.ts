@@ -61,7 +61,7 @@ export class JavaAccessofImportData extends MetricCalculator {
     FECFC: FolderExtractComponentsFromCode,
     Filename: string
   ): number {
-    const foreignClassesAccessed = new Set<string>();
+    const foreignClassesWithFieldAccess = new Set<string>();
     const currentClassName = currentClasses[0]?.name;
 
     if (!currentClassName) {
@@ -111,54 +111,30 @@ export class JavaAccessofImportData extends MetricCalculator {
       }
     });
 
-    // Process methods to find usage of foreign class fields, methods, and local variables
+    // Process methods to find ONLY field accesses (not method calls)
     methods.forEach((method) => {
-      // Check fields used
-      method.fieldsUsed.forEach((fieldName) => {
-        for (const [name, type] of fieldTypes) {
-          if (fieldName.startsWith(name)) {
-            foreignClassesAccessed.add(type);
+      // Track which foreign classes are accessed through fields
+      if (method.fieldAccess && method.fieldAccess.length > 0) {
+        method.fieldAccess.forEach((fieldAccess) => {
+          // Extract the object part (e.g., 'bank' from 'bank.accountNumber')
+          const objectName = fieldAccess.split(".")[0];
+
+          // If this object is a field of foreign type
+          if (fieldTypes.has(objectName)) {
+            const foreignType = fieldTypes.get(objectName);
+            foreignClassesWithFieldAccess.add(foreignType!);
             console.log(
-              `[FDP] Found usage of foreign class ${type} through field ${name}`
+              `[FDP] Found direct field access to foreign class ${foreignType} through ${fieldAccess}`
             );
           }
-        }
-      });
-
-      // Check local variables
-      method.localVariables.forEach((localVar) => {
-        // Skip 'Unknown' placeholders or primitive placeholders
-        if (localVar === "Unknown" || primitiveTypes.has(localVar)) return;
-
-        // If local variable is a valid foreign type
-        if (isForeignClass(localVar)) {
-          foreignClassesAccessed.add(localVar);
-          console.log(
-            `[FDP] Found local variable of foreign type: ${localVar}`
-          );
-        }
-      });
-
-      // Check method calls
-      method.methodCalls.forEach((methodCall) => {
-        // Extract the object part of the call (e.g., 'providerA' from 'providerA.getDataA')
-        const objectName = methodCall.split(".")[0];
-
-        // If the object matches a foreign field, it's a foreign method call
-        if (fieldTypes.has(objectName)) {
-          const foreignType = fieldTypes.get(objectName);
-          foreignClassesAccessed.add(foreignType!);
-          console.log(
-            `[FDP] Found usage of foreign class ${foreignType} through method call ${methodCall}`
-          );
-        }
-      });
+        });
+      }
     });
 
-    const foreignClasses = Array.from(foreignClassesAccessed);
-    console.log("\n[FDP] Foreign Classes Accessed:", foreignClasses);
-    console.log("[FDP] Total count:", foreignClasses.length);
+    const foreignClasses = Array.from(foreignClassesWithFieldAccess);
+    console.log("\n[FDP] Foreign Classes with Field Access:", foreignClasses);
+    console.log("[FDP] Total FDP count:", foreignClasses.length);
 
-    return foreignClassesAccessed.size;
+    return foreignClassesWithFieldAccess.size;
   }
 }
