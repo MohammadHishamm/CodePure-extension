@@ -40,6 +40,7 @@ const initialize_1 = require("../initialize");
 const utils_1 = require("../utils");
 const GoogleGemini_AI_1 = require("./GoogleGemini_AI");
 const fs = __importStar(require("fs"));
+const path = __importStar(require("path"));
 let isAnalyzing = false;
 const diagnosticCollection = vscode.languages.createDiagnosticCollection("codepure");
 async function analyzeCode(document, sourceCode) {
@@ -80,6 +81,7 @@ async function analyzeCode(document, sourceCode) {
                 detectAndSuggestFixes(document, results);
                 // highlightBrainClassContributors(document,diagnosticCollection);
                 highlightDataClass(document, diagnosticCollection);
+                highlightGodClassContributors(document, diagnosticCollection);
             }
             else {
                 vscode.window.showInformationMessage("Error Occurred While Analyzing.");
@@ -178,8 +180,11 @@ const noamHighlightType = vscode.window.createTextEditorDecorationType({
 const wocHighlightType = vscode.window.createTextEditorDecorationType({
     backgroundColor: "rgba(0, 255, 255, 0.4)" // Cyan for WOC
 });
+const tccHighlightType = vscode.window.createTextEditorDecorationType({
+    backgroundColor: "rgba(0, 255, 255, 0.3)" // Cyan for TCC
+});
 // Path to the JSON file
-const METRICS_FILE_PATH = "C:\\Users\\Mohammad\\OneDrive\\Documents\\MIU\\CodePure-extension\\APP\\src\\Results\\MetricsCalculated.json";
+let METRICS_FILE_PATH = path.join(__dirname, "..", "..", "src", "Results", "MetricsCalculated.json");
 async function highlightBrainClassContributors(document, diagnosticCollection) {
     if (!fs.existsSync(METRICS_FILE_PATH)) {
         console.error("Metrics JSON file not found:", METRICS_FILE_PATH);
@@ -288,6 +293,46 @@ async function highlightDataClass(document, diagnosticCollection) {
         editor.setDecorations(wmcHighlightType, wmcRanges);
         editor.setDecorations(noamHighlightType, noamRanges);
         editor.setDecorations(wocHighlightType, wocRanges);
+    }
+}
+async function highlightGodClassContributors(document, diagnosticCollection) {
+    if (!fs.existsSync(METRICS_FILE_PATH)) {
+        console.error("Metrics JSON file not found:", METRICS_FILE_PATH);
+        return;
+    }
+    const fileContent = fs.readFileSync(METRICS_FILE_PATH, 'utf-8');
+    const metricsData = JSON.parse(fileContent);
+    const fileMetrics = metricsData.find(entry => entry.fullPath === document.fileName);
+    if (!fileMetrics) {
+        console.warn("No metrics found for file:", document.fileName);
+        return;
+    }
+    const WMC = fileMetrics.metrics.find(m => m.name === "WMC")?.value || 0;
+    const TCC = fileMetrics.metrics.find(m => m.name === "TCC")?.value || 1;
+    console.log("Extracted WMC:", WMC, "TCC:", TCC);
+    const diagnostics = [];
+    const wmcRanges = [];
+    const tccRanges = [];
+    if (TCC < 0.333) {
+        const classHeadRange = new vscode.Range(new vscode.Position(0, 0), new vscode.Position(0, document.lineAt(0).text.length));
+        tccRanges.push(classHeadRange);
+        diagnostics.push(new vscode.Diagnostic(classHeadRange, "Low cohesion contributes to a God Class (TCC < 0.333)", vscode.DiagnosticSeverity.Warning));
+    }
+    if (WMC >= 19) {
+        for (let i = 0; i < document.lineCount; i++) {
+            const lineText = document.lineAt(i).text.trim();
+            if (/^\s*(public|private|protected)?\s*\w+\s+\w+\s*\(.*\)\s*\{?/.test(lineText)) {
+                const functionRange = new vscode.Range(new vscode.Position(i, 0), new vscode.Position(i, lineText.length));
+                wmcRanges.push(functionRange);
+                diagnostics.push(new vscode.Diagnostic(functionRange, "High complexity contributes to a God Class (WMC ≥ 43.87)", vscode.DiagnosticSeverity.Warning));
+            }
+        }
+    }
+    diagnosticCollection.set(document.uri, diagnostics);
+    const editor = vscode.window.activeTextEditor;
+    if (editor && editor.document.uri.toString() === document.uri.toString()) {
+        editor.setDecorations(wmcHighlightType, wmcRanges);
+        editor.setDecorations(tccHighlightType, tccRanges);
     }
 }
 //# sourceMappingURL=AnalyzeCode.js.map

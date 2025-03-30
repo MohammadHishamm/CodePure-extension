@@ -78,6 +78,7 @@ export async function analyzeCode(
           detectAndSuggestFixes(document, results);
           // highlightBrainClassContributors(document,diagnosticCollection);
           highlightDataClass(document,diagnosticCollection);
+          highlightGodClassContributors(document,diagnosticCollection);
          
         } else {
           vscode.window.showInformationMessage(
@@ -238,9 +239,20 @@ const wocHighlightType = vscode.window.createTextEditorDecorationType({
   backgroundColor: "rgba(0, 255, 255, 0.4)" // Cyan for WOC
 });
 
+const tccHighlightType = vscode.window.createTextEditorDecorationType({
+  backgroundColor: "rgba(0, 255, 255, 0.3)" // Cyan for TCC
+});
 
 // Path to the JSON file
-const METRICS_FILE_PATH = "C:\\Users\\Mohammad\\OneDrive\\Documents\\MIU\\CodePure-extension\\APP\\src\\Results\\MetricsCalculated.json";
+let METRICS_FILE_PATH = path.join(
+  __dirname,
+  "..",
+  "..",
+  "src",
+  "Results",
+  "MetricsCalculated.json"
+);
+
 async function highlightBrainClassContributors(
   document: vscode.TextDocument,
   diagnosticCollection: vscode.DiagnosticCollection
@@ -415,4 +427,70 @@ console.log(`Extracted LOC: ${LOC}, WMC: ${WMC}`);
       editor.setDecorations(wocHighlightType, wocRanges);
     }
 
+}
+
+async function highlightGodClassContributors(
+  document: vscode.TextDocument,
+  diagnosticCollection: vscode.DiagnosticCollection
+): Promise<void> {
+  if (!fs.existsSync(METRICS_FILE_PATH)) {
+    console.error("Metrics JSON file not found:", METRICS_FILE_PATH);
+    return;
+  }
+
+  const fileContent = fs.readFileSync(METRICS_FILE_PATH, 'utf-8');
+  const metricsData = JSON.parse(fileContent) as Array<{ fullPath: string; metrics: { name: string; value: number }[] }>;
+
+  const fileMetrics = metricsData.find(entry => entry.fullPath === document.fileName);
+  if (!fileMetrics) {
+    console.warn("No metrics found for file:", document.fileName);
+    return;
+  }
+
+  const WMC = fileMetrics.metrics.find(m => m.name === "WMC")?.value || 0;
+  const TCC = fileMetrics.metrics.find(m => m.name === "TCC")?.value || 1;
+
+  console.log("Extracted WMC:", WMC, "TCC:", TCC);
+
+  const diagnostics: vscode.Diagnostic[] = [];
+  const wmcRanges: vscode.Range[] = [];
+  const tccRanges: vscode.Range[] = [];
+
+  if (TCC < 0.333) {
+    const classHeadRange = new vscode.Range(
+      new vscode.Position(0, 0),
+      new vscode.Position(0, document.lineAt(0).text.length)
+    );
+    tccRanges.push(classHeadRange);
+    diagnostics.push(new vscode.Diagnostic(
+      classHeadRange,
+      "Low cohesion contributes to a God Class (TCC < 0.333)",
+      vscode.DiagnosticSeverity.Warning
+    ));
+  }
+
+  if (WMC >= 19) {
+    for (let i = 0; i < document.lineCount; i++) {
+      const lineText = document.lineAt(i).text.trim();
+      if (/^\s*(public|private|protected)?\s*\w+\s+\w+\s*\(.*\)\s*\{?/.test(lineText)) {
+        const functionRange = new vscode.Range(
+          new vscode.Position(i, 0),
+          new vscode.Position(i, lineText.length)
+        );
+        wmcRanges.push(functionRange);
+        diagnostics.push(new vscode.Diagnostic(
+          functionRange,
+          "High complexity contributes to a God Class (WMC ≥ 43.87)",
+          vscode.DiagnosticSeverity.Warning
+        ));
+      }
+    }
+  }
+
+  diagnosticCollection.set(document.uri, diagnostics);
+  const editor = vscode.window.activeTextEditor;
+  if (editor && editor.document.uri.toString() === document.uri.toString()) {
+    editor.setDecorations(wmcHighlightType, wmcRanges);
+    editor.setDecorations(tccHighlightType, tccRanges);
+  }
 }
