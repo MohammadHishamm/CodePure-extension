@@ -65,9 +65,10 @@ export function registerCommands(context: vscode.ExtensionContext) {
   });
 
   
-  const showUMLCommand = vscode.commands.registerCommand("extension.ViewUML", () => 
+  const showUMLCommand = vscode.commands.registerCommand("extension.ViewUML", async () => 
   {
-    UMLDashboard.show(FECFcode.getAllParsedComponents());
+      await FECFcode.parseAllJavaFiles();
+      UMLDashboard.show(FECFcode.getAllParsedComponents());
   });
 
   context.subscriptions.push(activateCommand, showUMLCommand , deactivateCommand, analyzeSelectedCodeCommand, openSettingsCommand,showDashboardCommand,feedbackCommand);
