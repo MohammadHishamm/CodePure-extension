@@ -24,7 +24,6 @@ export class UMLExtractor {
       return;
     }
 
-
     const umlData: UMLData = { nodes: [], edges: [] };
     const classNames = new Set<string>();
 
@@ -42,7 +41,7 @@ export class UMLExtractor {
 
         classNames.add(classInfo.name);
         const classLabel = `${classInfo.isAbstract ? "Abstract " : ""}${classInfo.isInterface ? "Interface " : ""}${classInfo.name}`;
-        umlData.nodes.push({ data: { id: classInfo.name, label: classLabel } });
+        umlData.nodes.push({ data: { id: classInfo.name, label: this.addSpaceBetweenWords(classLabel) } });
 
         // Inheritance (extends)
         if (classInfo.parent) {
@@ -64,7 +63,7 @@ export class UMLExtractor {
         if (Array.isArray(classFile.fields)) {
           for (const field of classFile.fields) {
             const fieldLabel = `Field: ${field.name} : ${field.type || "unknown"}`;
-            umlData.nodes.push({ data: { id: `${classInfo.name}.${field.name}`, label: fieldLabel } });
+            umlData.nodes.push({ data: { id: `${classInfo.name}.${field.name}`, label: this.addSpaceBetweenWords(fieldLabel) } });
             if (field.type && classNames.has(field.type)) {
               umlData.edges.push({ data: { source: classInfo.name, target: field.type, label: "has" } });
             }
@@ -79,7 +78,7 @@ export class UMLExtractor {
                method.returnType = "void";
             }
             const methodLabel = `Method: ${method.name}(${method.params?.join(", ") || ""}) : ${method.returnType}`;
-            umlData.nodes.push({ data: { id: `${classInfo.name}.${method.name}`, label: methodLabel } });
+            umlData.nodes.push({ data: { id: `${classInfo.name}.${method.name}`, label: this.addSpaceBetweenWords(methodLabel) } });
           }
         }
       }
@@ -91,13 +90,19 @@ export class UMLExtractor {
       fs.mkdirSync(resultsDir, { recursive: true });
     }
 
-    // Save extracted UML data
+    // Save or Override extracted UML data
     const filePath = path.join(resultsDir, "ExtractedClasses.json");
     try {
+      // Writing new UML data, this will override the existing content.
       fs.writeFileSync(filePath, JSON.stringify(umlData, null, 2), "utf8");
       console.log("✅ UML data successfully written to", filePath);
     } catch (err) {
       console.error("❌ Error writing UML data:", err);
     }
+  }
+
+  // Function to add space between every word
+  private static addSpaceBetweenWords(label: string): string {
+    return label.split(/(?=[A-Z])/).join(" ").replace(/([a-z])([A-Z])/g, '$1 $2');
   }
 }

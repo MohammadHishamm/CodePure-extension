@@ -1,7 +1,7 @@
 import * as vscode from "vscode";
-import { ProblemsChecker } from "./Services/ProblemsChecker";
-import { isSupportedFileType } from "./Services/SupportedFileTypes";
-import { analyzeCode } from "./Services/AnalyzeCode";
+import { ProblemsChecker } from "./services/ProblemsChecker";
+import { isSupportedFileType } from "./services/SupportedFileTypes";
+import { analyzeCode } from "./services/AnalyzeCode";
 
 export function handleEvents(context: vscode.ExtensionContext) {
   vscode.workspace.onDidSaveTextDocument(async (document) => {

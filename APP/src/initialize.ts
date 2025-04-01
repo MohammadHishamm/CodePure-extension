@@ -6,7 +6,7 @@ import { CustomTreeProvider } from "./dashboard";
 import { FolderExtractComponentsFromCode } from "./Extractors/FolderExtractComponentsFromCode";
 import { javaParser } from "./Languages/javaParser";
 import { pythonParser } from "./Languages/pythonParser";
-import { ServerMetricsManager } from "./Services/ServerMetricsManager";
+import { ServerMetricsManager } from "./services/ServerMetricsManager";
 
 export const FECFcode = new FolderExtractComponentsFromCode();
 export const servermetricsmanager = new ServerMetricsManager();

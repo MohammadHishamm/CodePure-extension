@@ -1,7 +1,7 @@
 import * as vscode from "vscode";
 import * as fs from "fs";
 import * as path from "path";
-import { UMLExtractor } from "./Services/UMLExtractor";
+import { UMLExtractor } from "./services/UMLExtractor";
 
 export class UMLDashboard {
   public static currentPanel: UMLDashboard | undefined;
@@ -266,6 +266,9 @@ export class UMLDashboard {
                 loading.style.display = "none";
                 umlContainer.style.opacity = "1";
                 exportButtons.style.display = "flex";
+              }).catch((error) => {
+                console.error("Error during mermaid initialization:", error);
+                alert("Failed to generate UML diagram. Check the console for details.");
               });
             }, 1000);
           });
@@ -274,6 +277,7 @@ export class UMLDashboard {
             const svgElement = document.querySelector(".mermaid svg");
   
             if (!svgElement) {
+              console.error("Error: UML diagram not found!");
               alert("Error: UML diagram not found!");
               return;
             }
@@ -310,6 +314,11 @@ export class UMLDashboard {
               }, "image/png");
             };
   
+            img.onerror = function (error) {
+              console.error("Error while loading SVG image:", error);
+              alert("Error while loading SVG image.");
+            };
+  
             img.src = url;
           }
         </script>
@@ -317,6 +326,7 @@ export class UMLDashboard {
       </html>
     `;
   }
+  
   
   
   
