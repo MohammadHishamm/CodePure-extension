@@ -5,6 +5,7 @@ import { TreeItem } from "./TreeItem";
 import { GitHubAPI } from "./services/GithubAPI";
 import { Observer } from "./Core/MetricsObserver";
 import { MetricsFileFormat } from "./Interface/MetricsFileFormat";
+import { ServerMetricsManager } from "./services/ServerMetricsManager";
 
 export class CustomTreeProvider implements vscode.TreeDataProvider<TreeItem>, Observer {
   private _onDidChangeTreeData: vscode.EventEmitter<TreeItem | undefined | null | void> = new vscode.EventEmitter();
@@ -97,37 +98,42 @@ export class CustomTreeProvider implements vscode.TreeDataProvider<TreeItem>, Ob
             return [new TreeItem("No metrics to fetch", [], vscode.TreeItemCollapsibleState.None)];
         }
 
-        const metricItems = metricsData.map((item) => {
+        const serverManager = new ServerMetricsManager();
+        const response = await serverManager.sendMetricsFile();
+        
+
+        const metricItems = metricsData.map((item, index) => {  // ✅ Iterate over files correctly
           const fileUri = vscode.Uri.file(item.fullPath);
-
+      
           const fileMetrics = item.metrics.map(
-              (metric) => new TreeItem(`${metric.name}: ${metric.value}`, [], vscode.TreeItemCollapsibleState.None)
+              (metric) => new TreeItem(`🔎${metric.name}: ${metric.value}`, [], vscode.TreeItemCollapsibleState.None)
           );
-
-          // Make the folder name clickable like a link
-          const folderItem = new TreeItem(item.folderName, fileMetrics, vscode.TreeItemCollapsibleState.Collapsed);
-          
-          folderItem.resourceUri = fileUri; // This makes VS Code format it as a link
-
-          // Markdown tooltip with a clickable command
+      
+          // ✅ Get the correct prediction for this specific file
+          const filePrediction = response?.predictions?.[index] || {}; 
+      
+          const predictionItems: TreeItem[] = Object.entries(filePrediction).map(([smell, value]) => {
+              let status = value === 1 ? "✅ Detected" : "❌ Not Detected";
+              return new TreeItem(`${smell}: ${status}`, [], vscode.TreeItemCollapsibleState.None);
+          });
+      
+          const folderItem = new TreeItem(item.folderName, [...fileMetrics, ...predictionItems], vscode.TreeItemCollapsibleState.Collapsed);
+          folderItem.resourceUri = fileUri;
+      
           folderItem.tooltip = new vscode.MarkdownString(
               `[🔗 Click to open ${item.folderName}](command:vscode.open?${encodeURIComponent(JSON.stringify([fileUri.toString()]))})`
           );
           folderItem.tooltip.isTrusted = true;
-
-          // Set a command to open the file
+      
           folderItem.command = {
               command: "vscode.open",
               title: `Open ${item.folderName}`,
               arguments: [fileUri]
           };
-
+      
           return folderItem;
       });
-      
-      
-
-        const clearHistoryItem = new TreeItem("🗑️ Clear All History", [], vscode.TreeItemCollapsibleState.None);
+      const clearHistoryItem = new TreeItem("🗑️ Clear All History", [], vscode.TreeItemCollapsibleState.None);
         clearHistoryItem.command = {
             command: "extension.clearHistory",
             title: "Clear All History",
@@ -136,11 +142,14 @@ export class CustomTreeProvider implements vscode.TreeDataProvider<TreeItem>, Ob
 
         return [...metricItems, clearHistoryItem];
 
+
+
     } catch (err) {
         console.error("Error reading or parsing metrics file:", err);
         return [new TreeItem("Error fetching metrics", [], vscode.TreeItemCollapsibleState.None)];
     }
 }
+
 
 
 
