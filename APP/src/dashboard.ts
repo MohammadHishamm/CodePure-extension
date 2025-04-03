@@ -101,39 +101,44 @@ export class CustomTreeProvider implements vscode.TreeDataProvider<TreeItem>, Ob
         const serverManager = new ServerMetricsManager();
         const response = await serverManager.sendMetricsFile();
         
+        const metricItems = metricsData.map((item, index) => {
+            const fileUri = vscode.Uri.file(item.fullPath);
 
-        const metricItems = metricsData.map((item, index) => {  // ✅ Iterate over files correctly
-          const fileUri = vscode.Uri.file(item.fullPath);
-      
-          const fileMetrics = item.metrics.map(
-              (metric) => new TreeItem(`🔎${metric.name}: ${metric.value}`, [], vscode.TreeItemCollapsibleState.None)
-          );
-      
-          // ✅ Get the correct prediction for this specific file
-          const filePrediction = response?.predictions?.[index] || {}; 
-      
-          const predictionItems: TreeItem[] = Object.entries(filePrediction).map(([smell, value]) => {
-              let status = value === 1 ? "✅ Detected" : "❌ Not Detected";
-              return new TreeItem(`${smell}: ${status}`, [], vscode.TreeItemCollapsibleState.None);
-          });
-      
-          const folderItem = new TreeItem(item.folderName, [...fileMetrics, ...predictionItems], vscode.TreeItemCollapsibleState.Collapsed);
-          folderItem.resourceUri = fileUri;
-      
-          folderItem.tooltip = new vscode.MarkdownString(
-              `[🔗 Click to open ${item.folderName}](command:vscode.open?${encodeURIComponent(JSON.stringify([fileUri.toString()]))})`
-          );
-          folderItem.tooltip.isTrusted = true;
-      
-          folderItem.command = {
-              command: "vscode.open",
-              title: `Open ${item.folderName}`,
-              arguments: [fileUri]
-          };
-      
-          return folderItem;
-      });
-      const clearHistoryItem = new TreeItem("🗑️ Clear All History", [], vscode.TreeItemCollapsibleState.None);
+            const fileMetrics = item.metrics.map(
+                (metric) => new TreeItem(`🔎 ${metric.name}: ${metric.value}`, [], vscode.TreeItemCollapsibleState.None)
+            );
+
+            // ✅ Get the correct prediction for this specific file
+            const filePrediction = response?.predictions?.[index] || {}; 
+
+            // ✅ Filter out "Not Detected" smells
+            const detectedSmells: TreeItem[] = Object.entries(filePrediction)
+                .filter(([_, value]) => value === 1)  // Only keep detected smells
+                .map(([smell, _]) => new TreeItem(`⚠️ ${smell}: ‼️ Detected ‼️`, [], vscode.TreeItemCollapsibleState.None));
+
+            // ✅ If no code smells were detected, add a "No Code Smells" message
+            if (detectedSmells.length === 0) {
+                detectedSmells.push(new TreeItem("✅ No code smells ✅", [], vscode.TreeItemCollapsibleState.None));
+            }
+
+            const folderItem = new TreeItem(item.folderName, [...fileMetrics, ...detectedSmells], vscode.TreeItemCollapsibleState.Collapsed);
+            folderItem.resourceUri = fileUri;
+
+            folderItem.tooltip = new vscode.MarkdownString(
+                `[🔗 Click to open ${item.folderName}](command:vscode.open?${encodeURIComponent(JSON.stringify([fileUri.toString()]))})`
+            );
+            folderItem.tooltip.isTrusted = true;
+
+            folderItem.command = {
+                command: "vscode.open",
+                title: `Open ${item.folderName}`,
+                arguments: [fileUri]
+            };
+
+            return folderItem;
+        });
+
+        const clearHistoryItem = new TreeItem("🗑️ Clear All History", [], vscode.TreeItemCollapsibleState.None);
         clearHistoryItem.command = {
             command: "extension.clearHistory",
             title: "Clear All History",
@@ -142,13 +147,12 @@ export class CustomTreeProvider implements vscode.TreeDataProvider<TreeItem>, Ob
 
         return [...metricItems, clearHistoryItem];
 
-
-
     } catch (err) {
         console.error("Error reading or parsing metrics file:", err);
         return [new TreeItem("Error fetching metrics", [], vscode.TreeItemCollapsibleState.None)];
     }
 }
+
 
 
 
