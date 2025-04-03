@@ -75,8 +75,8 @@ CodePure was tested on **medium-sized GitHub repositories**:
 
 ## 📞 Contact & Contributions
 We welcome contributions! Feel free to:
-- Submit issues on **GitHub** *(repo link here)*
-- Suggest improvements & optimizations
+- Submit issues on **GitHub** 
+- Suggest improvements & optimizations in our feedback in the extension itself
 - Help refine detection accuracy with new test cases
 
 ---
