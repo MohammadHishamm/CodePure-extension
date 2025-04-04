@@ -11,11 +11,12 @@ import {
 } from "../initialize";
 import { pause } from "../utils";
 import { getFixSuggestion } from "./GoogleGemini_AI";
-import * as fs from 'fs';
-import * as path from 'path';
+import * as fs from "fs";
+import * as path from "path";
 
 let isAnalyzing = false;
-const diagnosticCollection = vscode.languages.createDiagnosticCollection("codepure");
+const diagnosticCollection =
+  vscode.languages.createDiagnosticCollection("codepure");
 
 export async function analyzeCode(
   document: vscode.TextDocument,
@@ -44,9 +45,23 @@ export async function analyzeCode(
       const rootNode = parser.parse(sourceCode);
 
       const metricsToCalculate = [
-        "LOC", "AMW", "CBO", "FDP", "DAC", "WMC", "WOC", "NOA",
-        "NOM", "NOAM", "NOPA", "NAbsm", "NProtM", "NAS", "PNAS",
-        "TCC", "DIT",
+        "LOC",
+        "AMW",
+        "CBO",
+        "FDP",
+        "DAC",
+        "WMC",
+        "WOC",
+        "NOA",
+        "NOM",
+        "NOAM",
+        "NOPA",
+        "NAbsm",
+        "NProtM",
+        "NAS",
+        "PNAS",
+        "TCC",
+        "DIT",
       ];
 
       try {
@@ -81,8 +96,7 @@ export async function analyzeCode(
           // highlightBrainClassContributors(document,diagnosticCollection);
           // highlightDataClass(document,diagnosticCollection);
           // highlightGodClassContributors(document,diagnosticCollection);
-          getModelPredictions(document,diagnosticCollection);
-         
+          getModelPredictions(document, diagnosticCollection);
         } else {
           vscode.window.showInformationMessage(
             "Error Occurred While Analyzing."
@@ -121,9 +135,9 @@ async function calculateMetricsWithProgress(
       // Update progress
       progress.report({
         message: `Calculating ${metricName}...`,
-        increment: 70 / metrics.length, 
+        increment: 70 / metrics.length,
       });
-      await pause(300); 
+      await pause(300);
     }
   }
 
@@ -138,13 +152,19 @@ async function calculateMetricsWithProgress(
   return results.join("\n");
 }
 
-async function detectAndSuggestFixes(document: vscode.TextDocument, results: string) {
+async function detectAndSuggestFixes(
+  document: vscode.TextDocument,
+  results: string
+) {
   const diagnostics: vscode.Diagnostic[] = [];
 
   if (results.includes("WMC") && results.includes("LOC")) {
     const fullRange = new vscode.Range(
       new vscode.Position(0, 0),
-      new vscode.Position(document.lineCount - 1, document.lineAt(document.lineCount - 1).text.length)
+      new vscode.Position(
+        document.lineCount - 1,
+        document.lineAt(document.lineCount - 1).text.length
+      )
     );
 
     // const diagnostic = new vscode.Diagnostic(
@@ -157,15 +177,16 @@ async function detectAndSuggestFixes(document: vscode.TextDocument, results: str
     // diagnostic.source = "CodePure";
     // diagnostics.push(diagnostic);
     // Show notification with Quick AI Fix button
-    vscode.window.showInformationMessage(
-      "CodePure detected a Brain Class! Want to apply a Quick AI Fix?",
-      "✨ Quick AI Fix"
-    ).then((selection) => {
-      if (selection === "✨ Quick AI Fix") {
-        vscode.commands.executeCommand("codepure.getAIFix", document);
-      }
-    });
-  
+    vscode.window
+      .showInformationMessage(
+        "CodePure detected a Brain Class! Want to apply a Quick AI Fix?",
+        "✨ Quick AI Fix"
+      )
+      .then((selection) => {
+        if (selection === "✨ Quick AI Fix") {
+          vscode.commands.executeCommand("codepure.getAIFix", document);
+        }
+      });
   }
 
   diagnosticCollection.set(document.uri, diagnostics);
@@ -190,7 +211,7 @@ vscode.languages.registerCodeActionsProvider("*", {
         fixAction.command = {
           command: "codepure.getAIFix",
           title: "Apply AI Fix",
-          arguments: [document], 
+          arguments: [document],
         };
 
         fixAction.diagnostics = [diagnostic];
@@ -202,48 +223,51 @@ vscode.languages.registerCodeActionsProvider("*", {
   },
 });
 
-vscode.commands.registerCommand("codepure.getAIFix", async (document: vscode.TextDocument) => {
-  if (!document) return;
+vscode.commands.registerCommand(
+  "codepure.getAIFix",
+  async (document: vscode.TextDocument) => {
+    if (!document) return;
 
-  vscode.window.showInformationMessage("Fetching AI fix suggestion...");
-  const sourceCode = document.getText();
-  const issue = "Brain Class detected, suggest a fix.";
-  const fix = await getFixSuggestion(sourceCode, issue);
+    vscode.window.showInformationMessage("Fetching AI fix suggestion...");
+    const sourceCode = document.getText();
+    const issue = "Brain Class detected, suggest a fix.";
+    const fix = await getFixSuggestion(sourceCode, issue);
 
-  if (fix) {
-    const edit = new vscode.WorkspaceEdit();
-    const fullRange = new vscode.Range(
-      new vscode.Position(0, 0),
-      new vscode.Position(document.lineCount, 0)
-    );
+    if (fix) {
+      const edit = new vscode.WorkspaceEdit();
+      const fullRange = new vscode.Range(
+        new vscode.Position(0, 0),
+        new vscode.Position(document.lineCount, 0)
+      );
 
-    edit.replace(document.uri, fullRange, fix);
-    await vscode.workspace.applyEdit(edit);
-    vscode.window.showInformationMessage("AI Fix applied!");
-  } else {
-    vscode.window.showWarningMessage("No AI fix suggestion available.");
+      edit.replace(document.uri, fullRange, fix);
+      await vscode.workspace.applyEdit(edit);
+      vscode.window.showInformationMessage("AI Fix applied!");
+    } else {
+      vscode.window.showWarningMessage("No AI fix suggestion available.");
+    }
   }
-});
+);
 
 // Define highlight styles
 const wmcHighlightType = vscode.window.createTextEditorDecorationType({
-  backgroundColor: "rgba(255, 255, 0, 0.4)" // Yellow for WMC
+  backgroundColor: "rgba(255, 255, 0, 0.4)", // Yellow for WMC
 });
 
 const locHighlightType = vscode.window.createTextEditorDecorationType({
-  backgroundColor: "rgba(255, 105, 180, 0.3)" // Pink for LOC
+  backgroundColor: "rgba(255, 105, 180, 0.3)", // Pink for LOC
 });
 
 const noamHighlightType = vscode.window.createTextEditorDecorationType({
-  backgroundColor: "rgba(255, 105, 180, 0.3)" // Pink for NOAM (Accessors)
+  backgroundColor: "rgba(255, 105, 180, 0.3)", // Pink for NOAM (Accessors)
 });
 
 const wocHighlightType = vscode.window.createTextEditorDecorationType({
-  backgroundColor: "rgba(0, 255, 255, 0.4)" // Cyan for WOC
+  backgroundColor: "rgba(0, 255, 255, 0.4)", // Cyan for WOC
 });
 
 const tccHighlightType = vscode.window.createTextEditorDecorationType({
-  backgroundColor: "rgba(0, 255, 255, 0.3)" // Cyan for TCC
+  backgroundColor: "rgba(0, 255, 255, 0.3)", // Cyan for TCC
 });
 
 // Path to the JSON file
@@ -265,31 +289,36 @@ async function highlightBrainClassContributors(
     return;
   }
 
-  const fileContent = fs.readFileSync(METRICS_FILE_PATH, 'utf-8');
-  const metricsData = JSON.parse(fileContent) as Array<{ fullPath: string; metrics: { name: string; value: number }[] }>;
+  const fileContent = fs.readFileSync(METRICS_FILE_PATH, "utf-8");
+  const metricsData = JSON.parse(fileContent) as Array<{
+    fullPath: string;
+    metrics: { name: string; value: number }[];
+  }>;
 
   // Find metrics for the current file
-  const fileMetrics = metricsData.find(entry => entry.fullPath === document.fileName);
+  const fileMetrics = metricsData.find(
+    (entry) => entry.fullPath === document.fileName
+  );
   if (!fileMetrics) {
     console.warn("No metrics found for file:", document.fileName);
     return;
   }
 
   // Extract LOC & WMC
-  const LOC = fileMetrics.metrics.find(m => m.name === "LOC")?.value || 0;
-  const WMC = fileMetrics.metrics.find(m => m.name === "WMC")?.value || 0;
+  const LOC = fileMetrics.metrics.find((m) => m.name === "LOC")?.value || 0;
+  const WMC = fileMetrics.metrics.find((m) => m.name === "WMC")?.value || 0;
 
   console.log("File Path:", METRICS_FILE_PATH);
-console.log("File Content:", fileContent);
-console.log("Found Metrics:", fileMetrics);
-console.log(`Extracted LOC: ${LOC}, WMC: ${WMC}`);
+  console.log("File Content:", fileContent);
+  console.log("Found Metrics:", fileMetrics);
+  console.log(`Extracted LOC: ${LOC}, WMC: ${WMC}`);
 
   const diagnostics: vscode.Diagnostic[] = [];
   const wmcRanges: vscode.Range[] = [];
   const locRanges: vscode.Range[] = [];
 
   // Apply highlighting rules
-  if (LOC >50) {
+  if (LOC > 50) {
     const classHeadRange = new vscode.Range(
       new vscode.Position(0, 0),
       new vscode.Position(0, document.lineAt(0).text.length)
@@ -311,7 +340,11 @@ console.log(`Extracted LOC: ${LOC}, WMC: ${WMC}`);
     // Iterate over lines and find method headers to highlight
     for (let i = 0; i < document.lineCount; i++) {
       const lineText = document.lineAt(i).text.trim();
-      if (/^\s*(public|private|protected)?\s*\w+\s+\w+\s*\(.*\)\s*\{?/.test(lineText)) {
+      if (
+        /^\s*(public|private|protected)?\s*\w+\s+\w+\s*\(.*\)\s*\{?/.test(
+          lineText
+        )
+      ) {
         const functionRange = new vscode.Range(
           new vscode.Position(i, 0),
           new vscode.Position(i, lineText.length)
@@ -321,7 +354,7 @@ console.log(`Extracted LOC: ${LOC}, WMC: ${WMC}`);
 
         const diagnostic = new vscode.Diagnostic(
           functionRange,
-          "Complex method contributing to high WMC (> 87)",
+          " God Class Code Smell detected (Complex method contributing to high WMC)",
           vscode.DiagnosticSeverity.Warning
         );
         diagnostic.code = "brainClass.WMC";
@@ -341,95 +374,116 @@ console.log(`Extracted LOC: ${LOC}, WMC: ${WMC}`);
   }
 }
 
-  async function highlightDataClass(
-    document: vscode.TextDocument,
-    diagnosticCollection: vscode.DiagnosticCollection
-  ): Promise<void> {
-    if (!fs.existsSync(METRICS_FILE_PATH)) {
-      console.error("Metrics JSON file not found:", METRICS_FILE_PATH);
-      return;
+async function highlightDataClass(
+  document: vscode.TextDocument,
+  diagnosticCollection: vscode.DiagnosticCollection
+): Promise<void> {
+  if (!fs.existsSync(METRICS_FILE_PATH)) {
+    console.error("Metrics JSON file not found:", METRICS_FILE_PATH);
+    return;
+  }
+
+  const fileContent = fs.readFileSync(METRICS_FILE_PATH, "utf-8");
+  const metricsData = JSON.parse(fileContent) as Array<{
+    fullPath: string;
+    metrics: { name: string; value: number }[];
+  }>;
+
+  const fileMetrics = metricsData.find(
+    (entry) => entry.fullPath === document.fileName
+  );
+  if (!fileMetrics) {
+    console.warn("No metrics found for file:", document.fileName);
+    return;
+  }
+
+  const WOC = fileMetrics.metrics.find((m) => m.name === "WOC")?.value || 1;
+  const NOPA = fileMetrics.metrics.find((m) => m.name === "NOPA")?.value || 0;
+  const NOAM = fileMetrics.metrics.find((m) => m.name === "NOAM")?.value || 0;
+  const WMC = fileMetrics.metrics.find((m) => m.name === "WMC")?.value || 100;
+
+  console.log(
+    `Extracted WOC: ${WOC}, NOPA: ${NOPA}, NOAM: ${NOAM}, WMC: ${WMC}`
+  );
+
+  const diagnostics: vscode.Diagnostic[] = [];
+  const wmcRanges: vscode.Range[] = [];
+  const noamRanges: vscode.Range[] = [];
+  const wocRanges: vscode.Range[] = [];
+
+  // === Find actual class declaration line ===
+  let classDeclarationLine = -1;
+  for (let i = 0; i < document.lineCount; i++) {
+    const lineText = document.lineAt(i).text.trim();
+    if (/^\s*(public\s+)?(class|record)\s+\w+/.test(lineText)) {
+      classDeclarationLine = i;
+      break;
     }
-  
-    const fileContent = fs.readFileSync(METRICS_FILE_PATH, "utf-8");
-    const metricsData = JSON.parse(fileContent) as Array<{ fullPath: string; metrics: { name: string; value: number }[] }>;
-  
-    // Find metrics for the current file
-    const fileMetrics = metricsData.find(entry => entry.fullPath === document.fileName);
-    if (!fileMetrics) {
-      console.warn("No metrics found for file:", document.fileName);
-      return;
-    }
-  
-    // Extract required metrics
-    const WOC = fileMetrics.metrics.find(m => m.name === "WOC")?.value || 1; // Default to 1 to avoid false positives
-    const NOPA = fileMetrics.metrics.find(m => m.name === "NOPA")?.value || 0;
-    const NOAM = fileMetrics.metrics.find(m => m.name === "NOAM")?.value || 0;
-    const WMC = fileMetrics.metrics.find(m => m.name === "WMC")?.value || 100; // Default high to avoid false positives
-  
-    console.log(`Extracted WOC: ${WOC}, NOPA: ${NOPA}, NOAM: ${NOAM}, WMC: ${WMC}`);
-  
-    const diagnostics: vscode.Diagnostic[] = [];
-    const wmcRanges: vscode.Range[] = [];
-    const noamRanges: vscode.Range[] = [];
-    const wocRanges: vscode.Range[] = [];
-  
-    // Check Data Class conditions
-    if (WOC < 0.333 || (NOPA + NOAM) > 2 || WMC < 29) {
-      // Highlight class head for WOC
-      const classHeadRange = new vscode.Range(
-        new vscode.Position(0, 0),
-        new vscode.Position(0, document.lineAt(0).text.length)
-      );
-      wocRanges.push(classHeadRange);
-      diagnostics.push(new vscode.Diagnostic(
+  }
+
+  if (classDeclarationLine !== -1) {
+    const classLineText = document.lineAt(classDeclarationLine).text;
+    const classHeadRange = new vscode.Range(
+      new vscode.Position(classDeclarationLine, 0),
+      new vscode.Position(classDeclarationLine, classLineText.length)
+    );
+    wocRanges.push(classHeadRange);
+    diagnostics.push(
+      new vscode.Diagnostic(
         classHeadRange,
-        "Try to make the weight less (WOC < 0.333).",
+        "Data Class Code Smell detected: this class mainly holds state with minimal logic. Using a record or adding clear separation of concerns could improve clarity and maintainability",
         vscode.DiagnosticSeverity.Warning
-      ));
-  
-      // Highlight method heads for WMC
-      for (let i = 0; i < document.lineCount; i++) {
-        const lineText = document.lineAt(i).text.trim();
-  
-        // Detect method heads (functions)
-        if (/^\s*(public|private|protected)?\s*\w+\s+\w+\s*\(.*\)\s*\{?/.test(lineText)) {
-          const functionRange = new vscode.Range(
-            new vscode.Position(i, 0),
-            new vscode.Position(i, lineText.length)
-          );
-  
-          if (WMC > 0) {
-            wmcRanges.push(functionRange);
-            diagnostics.push(new vscode.Diagnostic(
-              functionRange,
-              "Try to make complexity less in this function (WMC).",
-              vscode.DiagnosticSeverity.Warning
-            ));
-          }
-  
-          // Detect accessor methods (getters/setters)
-          if (/^\s*(public|protected)\s+\w+\s+(get|set)[A-Z]\w*\s*\(.*\)\s*\{?/.test(lineText)) {
-            noamRanges.push(functionRange);
-            diagnostics.push(new vscode.Diagnostic(
-              functionRange,
-              "Too much accessor methods (NOAM).",
-              vscode.DiagnosticSeverity.Warning
-            ));
-          }
-        }
+      )
+    );
+  }
+
+  // === Highlight accessor method heads (NOAM) ===
+  for (let i = 0; i < document.lineCount; i++) {
+    const lineText = document.lineAt(i).text.trim();
+
+    if (
+      /^\s*(public|private|protected)?\s*\w+\s+\w+\s*\(.*\)\s*\{?/.test(
+        lineText
+      )
+    ) {
+      const functionRange = new vscode.Range(
+        new vscode.Position(i, 0),
+        new vscode.Position(i, lineText.length)
+      );
+
+      if (
+        /^\s*(public|protected)\s+\w+\s+(get|set)[A-Z]\w*\s*\(.*\)\s*\{?/.test(
+          lineText
+        )
+      ) {
+        noamRanges.push(functionRange);
+        diagnostics.push(
+          new vscode.Diagnostic(
+            functionRange,
+            "Too many accessor methods (NOAM).",
+            vscode.DiagnosticSeverity.Warning
+          )
+        );
       }
     }
-  
-    // Apply decorations and diagnostics
-    diagnosticCollection.set(document.uri, diagnostics);
-  
-    const editor = vscode.window.activeTextEditor;
-    if (editor && editor.document.uri.toString() === document.uri.toString()) {
-      editor.setDecorations(wmcHighlightType, wmcRanges);
-      editor.setDecorations(noamHighlightType, noamRanges);
-      editor.setDecorations(wocHighlightType, wocRanges);
-    }
+  }
 
+  // Apply diagnostics
+  diagnosticCollection.set(document.uri, diagnostics);
+
+  // Apply highlights in active editor
+  const editor = vscode.window.activeTextEditor;
+  if (editor && editor.document.uri.toString() === document.uri.toString()) {
+    // Clear previous highlights (optional safety)
+    editor.setDecorations(wmcHighlightType, []);
+    editor.setDecorations(noamHighlightType, []);
+    editor.setDecorations(wocHighlightType, []);
+
+    // Apply new ones
+    editor.setDecorations(wmcHighlightType, wmcRanges);
+    editor.setDecorations(noamHighlightType, noamRanges);
+    editor.setDecorations(wocHighlightType, wocRanges);
+  }
 }
 
 async function highlightGodClassContributors(
@@ -441,17 +495,22 @@ async function highlightGodClassContributors(
     return;
   }
 
-  const fileContent = fs.readFileSync(METRICS_FILE_PATH, 'utf-8');
-  const metricsData = JSON.parse(fileContent) as Array<{ fullPath: string; metrics: { name: string; value: number }[] }>;
+  const fileContent = fs.readFileSync(METRICS_FILE_PATH, "utf-8");
+  const metricsData = JSON.parse(fileContent) as Array<{
+    fullPath: string;
+    metrics: { name: string; value: number }[];
+  }>;
 
-  const fileMetrics = metricsData.find(entry => entry.fullPath === document.fileName);
+  const fileMetrics = metricsData.find(
+    (entry) => entry.fullPath === document.fileName
+  );
   if (!fileMetrics) {
     console.warn("No metrics found for file:", document.fileName);
     return;
   }
 
-  const WMC = fileMetrics.metrics.find(m => m.name === "WMC")?.value || 0;
-  const TCC = fileMetrics.metrics.find(m => m.name === "TCC")?.value || 1;
+  const WMC = fileMetrics.metrics.find((m) => m.name === "WMC")?.value || 0;
+  const TCC = fileMetrics.metrics.find((m) => m.name === "TCC")?.value || 1;
 
   console.log("Extracted WMC:", WMC, "TCC:", TCC);
 
@@ -459,40 +518,66 @@ async function highlightGodClassContributors(
   const wmcRanges: vscode.Range[] = [];
   const tccRanges: vscode.Range[] = [];
 
-  if (TCC < 0.333) {
-    const classHeadRange = new vscode.Range(
-      new vscode.Position(0, 0),
-      new vscode.Position(0, document.lineAt(0).text.length)
-    );
-    tccRanges.push(classHeadRange);
-    diagnostics.push(new vscode.Diagnostic(
-      classHeadRange,
-      "Low cohesion contributes to a God Class (TCC < 0.333)",
-      vscode.DiagnosticSeverity.Warning
-    ));
+  // === NEW: Dynamically find class declaration ===
+  let classDeclarationLine = -1;
+  for (let i = 0; i < document.lineCount; i++) {
+    const lineText = document.lineAt(i).text.trim();
+    if (/^\s*(public\s+)?(class|record)\s+\w+/.test(lineText)) {
+      classDeclarationLine = i;
+      break;
+    }
   }
 
+  if (classDeclarationLine !== -1) {
+    const classLineText = document.lineAt(classDeclarationLine).text;
+    const classHeadRange = new vscode.Range(
+      new vscode.Position(classDeclarationLine, 0),
+      new vscode.Position(classDeclarationLine, classLineText.length)
+    );
+    tccRanges.push(classHeadRange);
+    diagnostics.push(
+      new vscode.Diagnostic(
+        classHeadRange,
+        "God Class detected: too many responsibilities. Consider breaking into smaller, focused classes. This class is trying to do everything—consider splitting it up for better separation of concerns.",
+        vscode.DiagnosticSeverity.Warning
+      )
+    );
+  }
+
+  // Highlight methods for WMC (if too high)
   if (WMC >= 19) {
     for (let i = 0; i < document.lineCount; i++) {
       const lineText = document.lineAt(i).text.trim();
-      if (/^\s*(public|private|protected)?\s*\w+\s+\w+\s*\(.*\)\s*\{?/.test(lineText)) {
+      if (
+        /^\s*(public|private|protected)?\s*\w+\s+\w+\s*\(.*\)\s*\{?/.test(
+          lineText
+        )
+      ) {
         const functionRange = new vscode.Range(
           new vscode.Position(i, 0),
           new vscode.Position(i, lineText.length)
         );
         wmcRanges.push(functionRange);
-        diagnostics.push(new vscode.Diagnostic(
-          functionRange,
-          "High complexity contributes to a God Class (WMC ≥ 43.87)",
-          vscode.DiagnosticSeverity.Warning
-        ));
+        diagnostics.push(
+          new vscode.Diagnostic(
+            functionRange,
+            "High complexity contributes to a God Class (WMC ≥ 43.87)",
+            vscode.DiagnosticSeverity.Warning
+          )
+        );
       }
     }
   }
 
+  // Set diagnostics and decorations
   diagnosticCollection.set(document.uri, diagnostics);
   const editor = vscode.window.activeTextEditor;
   if (editor && editor.document.uri.toString() === document.uri.toString()) {
+    // Optional: clear old highlights
+    editor.setDecorations(wmcHighlightType, []);
+    editor.setDecorations(tccHighlightType, []);
+
+    // Apply new ones
     editor.setDecorations(wmcHighlightType, wmcRanges);
     editor.setDecorations(tccHighlightType, tccRanges);
   }
@@ -503,35 +588,36 @@ async function getModelPredictions(
   diagnosticCollection: vscode.DiagnosticCollection
 ): Promise<void> {
   const serverManager = new ServerMetricsManager();
-  
+
   // Send metrics file and get response
   const response = await serverManager.sendMetricsFile();
-  
+
   if (!response || !response.predictions || response.predictions.length === 0) {
     console.log("No predictions received.");
     return;
   }
 
-  // Extract the first predictions object
-  const predictions = response.predictions[0];
+  // Extract the LAST prediction object
+  const predictions = response.predictions[response.predictions.length - 1];
 
   // Check for each smell type and call the corresponding function if its value is 1
   if (predictions["Brain Class"] === 1) {
     console.log("Detected Brain Class");
     highlightBrainClassContributors(document, diagnosticCollection);
+    response.predictions = [];
   }
 
   if (predictions["Data Class"] === 1) {
     console.log("Detected Data Class");
     highlightDataClass(document, diagnosticCollection);
+    response.predictions = [];
   }
 
   if (predictions["God Class"] === 1) {
     console.log("Detected God Class");
     highlightGodClassContributors(document, diagnosticCollection);
+    response.predictions = [];
   }
-
- 
 
   // If no smells were detected (all values were 0)
   if (
@@ -541,8 +627,6 @@ async function getModelPredictions(
     predictions["Schizofrenic Class"] === 0
   ) {
     console.log("No code smells detected.");
+    response.predictions = [];
   }
 }
-
-
-

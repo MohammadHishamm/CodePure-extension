@@ -39,6 +39,7 @@ const path = __importStar(require("path"));
 const vscode = __importStar(require("vscode"));
 const TreeItem_1 = require("./TreeItem");
 const GithubAPI_1 = require("./services/GithubAPI");
+const ServerMetricsManager_1 = require("./services/ServerMetricsManager");
 class CustomTreeProvider {
     _onDidChangeTreeData = new vscode.EventEmitter();
     onDidChangeTreeData = this._onDidChangeTreeData.event;
@@ -111,16 +112,25 @@ class CustomTreeProvider {
                 console.log("No metrics data available.");
                 return [new TreeItem_1.TreeItem("No metrics to fetch", [], vscode.TreeItemCollapsibleState.None)];
             }
-            const metricItems = metricsData.map((item) => {
+            const serverManager = new ServerMetricsManager_1.ServerMetricsManager();
+            const response = await serverManager.sendMetricsFile();
+            const metricItems = metricsData.map((item, index) => {
                 const fileUri = vscode.Uri.file(item.fullPath);
-                const fileMetrics = item.metrics.map((metric) => new TreeItem_1.TreeItem(`${metric.name}: ${metric.value}`, [], vscode.TreeItemCollapsibleState.None));
-                // Make the folder name clickable like a link
-                const folderItem = new TreeItem_1.TreeItem(item.folderName, fileMetrics, vscode.TreeItemCollapsibleState.Collapsed);
-                folderItem.resourceUri = fileUri; // This makes VS Code format it as a link
-                // Markdown tooltip with a clickable command
+                const fileMetrics = item.metrics.map((metric) => new TreeItem_1.TreeItem(`🔎 ${metric.name}: ${metric.value}`, [], vscode.TreeItemCollapsibleState.None));
+                // ✅ Get the correct prediction for this specific file
+                const filePrediction = response?.predictions?.[index] || {};
+                // ✅ Filter out "Not Detected" smells
+                const detectedSmells = Object.entries(filePrediction)
+                    .filter(([_, value]) => value === 1) // Only keep detected smells
+                    .map(([smell, _]) => new TreeItem_1.TreeItem(`⚠️ ${smell}: ‼️ Detected ‼️`, [], vscode.TreeItemCollapsibleState.None));
+                // ✅ If no code smells were detected, add a "No Code Smells" message
+                if (detectedSmells.length === 0) {
+                    detectedSmells.push(new TreeItem_1.TreeItem("✅ No code smells ✅", [], vscode.TreeItemCollapsibleState.None));
+                }
+                const folderItem = new TreeItem_1.TreeItem(item.folderName, [...fileMetrics, ...detectedSmells], vscode.TreeItemCollapsibleState.Collapsed);
+                folderItem.resourceUri = fileUri;
                 folderItem.tooltip = new vscode.MarkdownString(`[🔗 Click to open ${item.folderName}](command:vscode.open?${encodeURIComponent(JSON.stringify([fileUri.toString()]))})`);
                 folderItem.tooltip.isTrusted = true;
-                // Set a command to open the file
                 folderItem.command = {
                     command: "vscode.open",
                     title: `Open ${item.folderName}`,
