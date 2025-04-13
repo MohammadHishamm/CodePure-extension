@@ -178,6 +178,7 @@ class MethodExtractor {
                 modifiers: this.getAccessModifier(modifiers),
                 params: this.extractMethodParams(node),
                 returnType: this.extractMethodReturnType(node),
+                isAbstract: this.isAbstractMethod(node),
                 isConstructor: node.type === "constructor_declaration",
                 isAccessor: this.isAccessor(node, name),
                 isOverridden: this.isOverriddenMethod(node),
@@ -225,6 +226,15 @@ class MethodExtractor {
             return typeNode.text;
         }
         return "No_Type";
+    }
+    isAbstractMethod(methodNode) {
+        const modifierNodes = methodNode.descendantsOfType("modifiers");
+        for (const modNode of modifierNodes) {
+            if (modNode.text.includes("abstract")) {
+                return true;
+            }
+        }
+        return false;
     }
     findParentClass(node, classes) {
         const className = node.parent?.type === "class_declaration" ? node.parent.text : "";

@@ -54,6 +54,7 @@ export class MethodExtractor {
     node: Parser.SyntaxNode,
     bodyStatements: string[]
   ) {
+
     if (node.type === "if_statement") {
       bodyStatements.push(node.type);
     } else if (node.type === "for_statement") {
@@ -198,6 +199,7 @@ export class MethodExtractor {
         modifiers: this.getAccessModifier(modifiers),
         params: this.extractMethodParams(node),
         returnType: this.extractMethodReturnType(node),
+        isAbstract: this.isAbstractMethod(node),
         isConstructor: node.type === "constructor_declaration",
         isAccessor: this.isAccessor(node, name),
         isOverridden: this.isOverriddenMethod(node),
@@ -259,6 +261,18 @@ export class MethodExtractor {
     return "No_Type";
   }
 
+  private isAbstractMethod(methodNode: Parser.SyntaxNode): boolean {
+    const modifierNodes = methodNode.descendantsOfType("modifiers");
+  
+    for (const modNode of modifierNodes) {
+      if (modNode.text.includes("abstract")) {
+        return true;
+      }
+    }
+  
+    return false;
+  }
+   
   private findParentClass(
     node: Parser.SyntaxNode,
     classes: ClassInfo[]
