@@ -2,8 +2,11 @@ import * as fs from "fs";
 import * as path from "path";
 import * as vscode from "vscode";
 import { TreeItem } from "../TreeItem";
+import { MongoService } from "./MongoDB"; // adjust path as needed
 
 export class GitHubAPI implements vscode.TreeDataProvider<TreeItem> {
+
+  
 
     public async fetchRepositoriesTreeItems(): Promise<TreeItem[]> {
         try {
@@ -12,7 +15,7 @@ export class GitHubAPI implements vscode.TreeDataProvider<TreeItem> {
                 vscode.window.showErrorMessage("No GitHub session found.");
                 return [];
             }
-
+    
             const accessToken = session.accessToken;
             const response = await fetch("https://api.github.com/user/repos", {
                 headers: {
@@ -20,48 +23,71 @@ export class GitHubAPI implements vscode.TreeDataProvider<TreeItem> {
                     Accept: "application/vnd.github.v3+json",
                 },
             });
-
+    
             if (!response.ok) {
                 throw new Error(`GitHub API error: ${response.statusText}`);
             }
-
+    
             const repositories = (await response.json()) as { name: string, owner: { login: string } }[];
             const repoItems: TreeItem[] = [];
-
+    
             const currentRepo = await this.getCurrentRepository();
             if (currentRepo) {
                 const currentRepoData = repositories.find(repo => repo.name === currentRepo);
                 if (currentRepoData) {
                     const owner = currentRepoData.owner.login;
                     const contributors = await this.fetchContributors(owner, currentRepo, accessToken);
-
+    
                     const currentRepoItem = new TreeItem(`${currentRepo} Info`, contributors, vscode.TreeItemCollapsibleState.Collapsed);
                     currentRepoItem.tooltip = `Owner: ${owner}`;
                     currentRepoItem.iconPath = new vscode.ThemeIcon("repo");
-
-                    const syncItem = new TreeItem("Sync with Database", [], vscode.TreeItemCollapsibleState.None);
-                    syncItem.iconPath = new vscode.ThemeIcon("database");
-                    syncItem.command = {
-                        command: "extension.syncDatabase",
-                        title: "Sync with Database",
-                        tooltip: "Click to sync the latest metrics with the database",
-                        arguments: [owner]
-                    };
-
-                    repoItems.push(currentRepoItem);
-                    repoItems.push(syncItem);
+    
+                    const mongo = MongoService.getInstance();
+                    await mongo.connect();
+                    const db = mongo.getDb();
+    
+                    const repoCollection = db.collection("Repos");
+    
+                    const repoDoc = await repoCollection.findOne({
+                        owner: owner,
+                        repositories: {
+                            $elemMatch: {
+                                name: currentRepo,
+                                owner: owner
+                            }
+                        }
+                    });
+    
+                    if (!repoDoc) {
+                        const syncItem = new TreeItem("Sync with Database", [], vscode.TreeItemCollapsibleState.None);
+                        syncItem.iconPath = new vscode.ThemeIcon("database");
+                        syncItem.command = {
+                            command: "extension.syncDatabase",
+                            title: "Sync with Database",
+                            tooltip: "Click to sync the latest metrics with the database",
+                            arguments: [owner, currentRepo]
+                        };
+                        repoItems.push(syncItem);
+                    } else {
+                        const alreadySyncedItem = new TreeItem("Already Synced", [], vscode.TreeItemCollapsibleState.None);
+                        alreadySyncedItem.iconPath = new vscode.ThemeIcon("check");
+                        repoItems.push(alreadySyncedItem);
+                    }
+    
+                    repoItems.unshift(currentRepoItem);
                 }
             } else {
                 repoItems.push(new TreeItem("This project isn't connected with a GitHub repository.", [], vscode.TreeItemCollapsibleState.None));
             }
-
+    
             return repoItems;
-
+    
         } catch (error) {
             console.error("Error fetching repositories:", error);
             return [new TreeItem("Error fetching repositories", [], vscode.TreeItemCollapsibleState.None)];
         }
     }
+    
 
     public async fetchContributors(owner: string, repo: string, accessToken: string): Promise<TreeItem[]> {
         try {

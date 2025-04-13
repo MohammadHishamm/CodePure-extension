@@ -256,64 +256,77 @@ async syncWithDatabase(owner: string) {
 
     const treeItems = await this.GithubApi.fetchRepositoriesTreeItems();
 
-    // Convert tree items into a JSON-friendly format
-    const dataToStore = treeItems.map(item => ({
-      label: item.label,
-      tooltip: item.tooltip,
-      description: item.description,
-      children: item.children?.map(child => ({
-        label: child.label,
-        tooltip: child.tooltip,
-        description: child.description,
-      })) || []
-    }));
+    const cleanRepoData = treeItems
+      .filter(item => item.label && item.label !== "Sync with Database")
+      .map(item => {
+        const repoName = item.label?.replace(" Info", "").trim();
+        const repoOwner = typeof item.tooltip === "string"
+          ? item.tooltip.replace("Owner: ", "")
+          : item.tooltip?.value.replace("Owner: ", "") || "";
 
-   // Connect to MongoDB
-const mongo = MongoService.getInstance();
-await mongo.connect();
-const db = mongo.getDb();
+        const contributors = item.children?.map(child => {
+          const match = child.label?.match(/(?:\(Me\)\s*)?([\w-]+)\s*-\s*(\d+)\s*commits/);
+          const username = match?.[1];
+          const contributions = parseInt(match?.[2] || "0", 10);
+          const tooltipText = typeof child.tooltip === "string" ? child.tooltip : child.tooltip?.value || "";
 
-const usersCollection = db.collection("Users");
-const reposCollection = db.collection("Repos");
+          return {
+            username,
+            contributions,
+            isOwner: tooltipText.includes("(Owner)"),
+            isCurrentUser: tooltipText.includes("(You)"),
+          };
+        }) || [];
 
-// Collect contributors from tree items
-const contributorUsernames = new Set<string>();
-for (const item of treeItems) {
-  item.children?.forEach(child => {
-    if (child.label) {
-      const match = child.label.match(/(?:\(Me\) )?([\w-]+)/); // extract GitHub username
-      if (match) {
-        contributorUsernames.add(match[1]);
+        return {
+          name: repoName,
+          owner: repoOwner,
+          contributors,
+        };
+      });
+
+    // Connect to MongoDB
+    const mongo = MongoService.getInstance();
+    await mongo.connect();
+    const db = mongo.getDb();
+
+    const usersCollection = db.collection("Users");
+    const reposCollection = db.collection("Repos");
+
+    // Extract contributor usernames
+    const contributorUsernames = new Set<string>();
+    cleanRepoData.forEach(repo => {
+      repo.contributors.forEach(contributor => {
+        if (contributor.username) {
+          contributorUsernames.add(contributor.username);
+        }
+      });
+    });
+
+    // Ensure the current user is also tracked
+    contributorUsernames.add(currentUser);
+
+    // Save or update all contributors
+    const bulkOps = Array.from(contributorUsernames).map(username => ({
+      updateOne: {
+        filter: { username },
+        update: {
+          $set: { username, lastSeen: new Date() }
+        },
+        upsert: true
       }
-    }
-  });
-}
+    }));
+    await usersCollection.bulkWrite(bulkOps);
 
-// Add the current user explicitly too
-contributorUsernames.add(currentUser);
+    // Save repository info
+    await reposCollection.insertOne({
+      owner: currentUser,
+      syncedAt: new Date(),
+      repositories: cleanRepoData,
+    });
 
-// Save or update all contributors
-const bulkOps = Array.from(contributorUsernames).map(username => ({
-  updateOne: {
-    filter: { username },
-    update: {
-      $set: { username, lastSeen: new Date() }
-    },
-    upsert: true
-  }
-}));
-await usersCollection.bulkWrite(bulkOps);
-
-// Save repository info (linked to owner)
-await reposCollection.insertOne({
-  owner: currentUser,
-  syncedAt: new Date(),
-  repositories: dataToStore,
-});
-
-vscode.window.showInformationMessage("✅ Users and repository info synced successfully!");
-
-
+    vscode.window.showInformationMessage("✅ Users and repository info synced successfully!");
+    this.refresh();
   } catch (error) {
     console.error("❌ Sync error:", error);
     vscode.window.showErrorMessage("An error occurred while syncing with the database.");
