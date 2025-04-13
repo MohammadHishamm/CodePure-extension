@@ -314,29 +314,35 @@ export class MethodExtractor {
 
   public getFieldsUsedInMethod(
     rootNode: Parser.SyntaxNode,
-    MethodName: string
+    methodName: string
   ): string[] {
-    const fieldsUsed: string[] = [];
-
-    const accessNodes = rootNode.descendantsOfType("variable_declarator");
-    accessNodes.forEach((accessNode) => {
-      const fieldName = accessNode.text;
-      if (
-        fieldName &&
-        !fieldsUsed.includes(fieldName) &&
-        fieldName !== MethodName
-      ) {
-        const identifierNode = accessNode.children.find(
-          (subChild) => subChild.type === "identifier"
-        );
-        if (identifierNode) {
-          fieldsUsed.push(identifierNode.text); // Add unique field names accessed
-        }
+    const fieldsUsed: Set<string> = new Set();
+  
+    // First, collect declared variables in this method (to avoid confusion with fields)
+    const declaredLocalVars = new Set<string>();
+    rootNode.descendantsOfType("variable_declarator").forEach((varNode) => {
+      const identifierNode = varNode.childForFieldName("name");
+      if (identifierNode) {
+        declaredLocalVars.add(identifierNode.text);
       }
     });
-
-    return fieldsUsed;
+  
+    // Traverse all identifiers in the method body
+    const bodyNode = rootNode.childForFieldName("body");
+    if (bodyNode) {
+      bodyNode.descendantsOfType("identifier").forEach((idNode) => {
+        const name = idNode.text;
+  
+        // If it's not a local variable AND not the method name itself
+        if (!declaredLocalVars.has(name) && name !== methodName) {
+          fieldsUsed.add(name);
+        }
+      });
+    }
+  
+    return Array.from(fieldsUsed);
   }
+  
 
   private extractMethodAnnotations(node: Parser.SyntaxNode): string[] {
     const annotations: string[] = [];
