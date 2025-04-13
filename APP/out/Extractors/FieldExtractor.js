@@ -16,17 +16,21 @@ class FieldExtractor {
                 if (child.type === "modifiers") {
                     modifiers = child.children.length > 0 ? child.children[0].text : "";
                 }
-                else if (child.type.includes('type')) {
+                else if (child.type.includes("type")) {
                     type = child.text; // Extract type (e.g., int, String)
                 }
-                else if (child.type.includes('variable_declarator')) {
-                    const identifierNode = child.children.find(subChild => subChild.type === "identifier");
+                else if (child.type.includes("variable_declarator")) {
+                    const identifierNode = child.children.find((subChild) => subChild.type === "identifier");
                     if (identifierNode) {
                         name = identifierNode.text; // Extract field name
                     }
                 }
             }
-            isEncapsulated = this.hasGetterSetter(name, methods);
+            // A field is only encapsulated if:
+            // 1. It's not public (must be private or protected) AND
+            // 2. It has either a getter or setter method
+            const hasAccessor = this.hasGetterSetter(name, methods);
+            isEncapsulated = modifiers.toLowerCase() !== "public" && hasAccessor;
             return {
                 name,
                 type,
@@ -43,7 +47,7 @@ class FieldExtractor {
         // Patterns for getter and setter methods (case-insensitive)
         const getterPattern = new RegExp(`get${capitalizedFieldName}`);
         const setterPattern = new RegExp(`set${capitalizedFieldName}`);
-        // Arrays to store method names being checked
+        // Arrays to store method names being checked (kept for potential debugging)
         const getterMethods = [];
         const setterMethods = [];
         // Iterate through methods to check for matching getter and setter methods
@@ -52,22 +56,17 @@ class FieldExtractor {
         methods.forEach((method) => {
             // Check if the method matches the getter pattern
             if (getterPattern.test(method.name)) {
-                getterMethods.push(method.name); // Add to getterMethods array if matched
+                getterMethods.push(method.name);
                 hasGetter = true;
             }
             // Check if the method matches the setter pattern
             if (setterPattern.test(method.name)) {
-                setterMethods.push(method.name); // Add to setterMethods array if matched
+                setterMethods.push(method.name);
                 hasSetter = true;
             }
         });
-        // Return true if both getter and setter methods are found
-        if (hasGetter && hasSetter) {
-            return true; // Field is encapsulated
-        }
-        else {
-            return false; // Field is NOT encapsulated
-        }
+        // Return true if EITHER getter OR setter methods are found
+        return hasGetter || hasSetter;
     }
 }
 exports.FieldExtractor = FieldExtractor;

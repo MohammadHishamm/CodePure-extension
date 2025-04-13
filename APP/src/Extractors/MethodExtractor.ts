@@ -90,30 +90,29 @@ export class MethodExtractor {
     });
   }
 
-// Detect Field Access in Method Body
-private extractFieldAccesses(node: Parser.SyntaxNode): string[] {
-  const fieldAccesses: string[] = [];
-  const bodyNode = node.childForFieldName("body");
+  // Detect Field Access in Method Body
+  private extractFieldAccesses(node: Parser.SyntaxNode): string[] {
+    const fieldAccesses: string[] = [];
+    const bodyNode = node.childForFieldName("body");
 
-  if (bodyNode) {
-    bodyNode.descendantsOfType("field_access").forEach((fieldNode) => {
-      const objectNode = fieldNode.child(0); // Usually the object before the dot
-      const fieldIdentifier = fieldNode.child(2); // Usually the field after the dot
+    if (bodyNode) {
+      bodyNode.descendantsOfType("field_access").forEach((fieldNode) => {
+        const objectNode = fieldNode.child(0); // Usually the object before the dot
+        const fieldIdentifier = fieldNode.child(2); // Usually the field after the dot
 
-      if (objectNode && fieldIdentifier) {
-        const fieldAccessText = `${objectNode.text}.${fieldIdentifier.text}`;
-        
-        // Exclude System.out or similar print/log calls
-        if (!fieldAccessText.includes("System.out")) {
-          fieldAccesses.push(fieldAccessText);
+        if (objectNode && fieldIdentifier) {
+          const fieldAccessText = `${objectNode.text}.${fieldIdentifier.text}`;
+
+          // Exclude System.out or similar print/log calls
+          if (!fieldAccessText.includes("System.out")) {
+            fieldAccesses.push(fieldAccessText);
+          }
         }
-      }
-    });
+      });
+    }
+
+    return fieldAccesses;
   }
-
-  return fieldAccesses;
-}
-
 
   // Call this function instead of looping manually
   private extractStatements(bodyNode: Parser.SyntaxNode): string[] {
@@ -152,22 +151,22 @@ private extractFieldAccesses(node: Parser.SyntaxNode): string[] {
   private extractMethodCalls(node: Parser.SyntaxNode): string[] {
     const methodCalls: string[] = [];
     const bodyNode = node.childForFieldName("body");
-  
+
     if (bodyNode) {
       bodyNode.descendantsOfType("method_invocation").forEach((callNode) => {
         const objectNode = callNode.childForFieldName("object");
         const methodNode = callNode.childForFieldName("name");
-  
+
         if (objectNode && methodNode) {
           const methodCall = `${objectNode.text}.${methodNode.text}`;
-  
+
           // Exclude System.out calls
           if (!methodCall.includes("System.out")) {
             methodCalls.push(methodCall);
           }
         } else if (methodNode) {
           const methodCall = methodNode.text;
-  
+
           // Exclude System.out calls for static methods
           if (!methodCall.includes("System.out")) {
             methodCalls.push(methodCall); // For static calls without object
@@ -175,10 +174,9 @@ private extractFieldAccesses(node: Parser.SyntaxNode): string[] {
         }
       });
     }
-  
+
     return methodCalls;
   }
-  
 
   // Extract Method Information Including All Details
   public extractMethods(
@@ -188,13 +186,13 @@ private extractFieldAccesses(node: Parser.SyntaxNode): string[] {
     // Collect all method and constructor declarations
     const methodNodes = [
       ...rootNode.descendantsOfType("constructor_declaration"),
-      ...rootNode.descendantsOfType("method_declaration")
+      ...rootNode.descendantsOfType("method_declaration"),
     ];
-  
+
     return methodNodes.map((node) => {
       const modifiers = this.extractMethodModifiers(node);
       const name = this.extractMethodName(node);
-     
+
       return {
         name,
         modifiers: this.getAccessModifier(modifiers),
@@ -209,14 +207,14 @@ private extractFieldAccesses(node: Parser.SyntaxNode): string[] {
         methodBody: this.extractStatements(node),
         localVariables: this.extractLocalVariables(node),
         methodCalls: this.extractMethodCalls(node),
-        fieldAccess:  this.extractFieldAccesses(node),
-        parent: this.findParentClass(node , classes),
+        fieldAccess: this.extractFieldAccesses(node),
+        parent: this.findParentClass(node, classes),
         startPosition: node.startPosition,
         endPosition: node.endPosition,
       };
     });
   }
-  
+
   // Helper Methods (to be defined)
   private isOverriddenMethod(node: Parser.SyntaxNode): boolean {
     const annotationNodes = node.descendantsOfType("marker_annotation");
@@ -242,28 +240,25 @@ private extractFieldAccesses(node: Parser.SyntaxNode): string[] {
   }
 
   private extractMethodReturnType(methodNode: Parser.SyntaxNode): string {
-
-  
     // Check if method is void
     const voidTypeNode = methodNode.childForFieldName("void_type");
     if (voidTypeNode) {
       return "void";
     }
-  
+
     const integralTypeNode = methodNode.descendantsOfType("integral_type")[0];
     if (integralTypeNode) {
       return integralTypeNode.text;
     }
-  
+
     const typeNode = methodNode.descendantsOfType("type_identifier")[0];
     if (typeNode) {
       return typeNode.text;
     }
-  
 
     return "No_Type";
   }
-  
+
   private findParentClass(
     node: Parser.SyntaxNode,
     classes: ClassInfo[]
@@ -273,52 +268,48 @@ private extractFieldAccesses(node: Parser.SyntaxNode): string[] {
     return classes.find((classInfo) => classInfo.name === className) ?? null;
   }
 
-
-  public isAccessor(rootNode: Parser.SyntaxNode, methodName: string): boolean {
-    let isAccessor = false;
-
-    // Check if the method name matches a getter or setter naming convention
-    if (/^get[A-Z]/.test(methodName) || /^set[A-Z]/.test(methodName)) {
-      const methodNodes = rootNode.descendantsOfType("method_declaration");
-
-      methodNodes.forEach((node) => {
-        const nameNode = node.childForFieldName("name")?.text;
-        if (nameNode === methodName) {
-          const bodyNode = node.childForFieldName("body");
-          if (bodyNode) {
-            const statements = bodyNode.children;
-
-            // Ensure the body has only [SyntaxNode, ReturnStatementNode, SyntaxNode] for get or  [SyntaxNode, ExpressionStatementNode, SyntaxNode] for set
-            if (statements.length === 3) {
-              // get the middle statment returnstatment or expressionstatment
-              const statement = statements[1];
-
-              if (statement.type === "expression_statement") {
-                // get the return statment and gets its child which is field accesed so it is a set
-                const returnValue = statement.childrenForFieldName(
-                  "ExpressionStatementNode"
-                );
-
-                if (returnValue) {
-                  isAccessor = true;
-                }
-              } else if (statement.type === "return_statement") {
-                // get the return statment and gets its child which is field accesed so it is a get
-                const returnValue =
-                  statement.childrenForFieldName("FieldAccessNode");
-
-                if (returnValue) {
-                  isAccessor = true;
-                }
-              }
-            }
-          }
-        }
-        return isAccessor;
-      });
+  public isAccessor(node: Parser.SyntaxNode, methodName: string): boolean {
+    if (
+      !methodName.startsWith("get") &&
+      !methodName.startsWith("Get") &&
+      !methodName.startsWith("set") &&
+      !methodName.startsWith("Set")
+    ) {
+      return false;
     }
 
-    return isAccessor;
+    const modifiers = this.extractMethodModifiers(node);
+    if (modifiers.includes("protected") || modifiers.includes("static")) {
+      return false;
+    }
+
+    const bodyNode = node.childForFieldName("body");
+    if (!bodyNode) {
+      return false;
+    }
+
+    const statements = bodyNode.namedChildren;
+    if (statements.length > 3) {
+      return false;
+    }
+
+    const controlStructures = bodyNode.descendantsOfType([
+      "if_statement",
+      "for_statement",
+      "while_statement",
+      "try_statement",
+      "switch_statement",
+    ]);
+
+    if (controlStructures.length > 0) {
+      return false;
+    }
+
+    if (methodName.startsWith("get") || methodName.startsWith("Get")) {
+      return bodyNode.text.includes("return");
+    } else {
+      return bodyNode.text.includes("=");
+    }
   }
 
   public getFieldsUsedInMethod(

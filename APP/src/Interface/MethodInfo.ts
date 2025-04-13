@@ -18,4 +18,3 @@ export interface MethodInfo {
   startPosition: Parser.Point;
   endPosition: Parser.Point;
 }
-

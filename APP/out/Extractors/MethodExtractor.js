@@ -168,7 +168,7 @@ class MethodExtractor {
         // Collect all method and constructor declarations
         const methodNodes = [
             ...rootNode.descendantsOfType("constructor_declaration"),
-            ...rootNode.descendantsOfType("method_declaration")
+            ...rootNode.descendantsOfType("method_declaration"),
         ];
         return methodNodes.map((node) => {
             const modifiers = this.extractMethodModifiers(node);
@@ -230,42 +230,41 @@ class MethodExtractor {
         const className = node.parent?.type === "class_declaration" ? node.parent.text : "";
         return classes.find((classInfo) => classInfo.name === className) ?? null;
     }
-    isAccessor(rootNode, methodName) {
-        let isAccessor = false;
-        // Check if the method name matches a getter or setter naming convention
-        if (/^get[A-Z]/.test(methodName) || /^set[A-Z]/.test(methodName)) {
-            const methodNodes = rootNode.descendantsOfType("method_declaration");
-            methodNodes.forEach((node) => {
-                const nameNode = node.childForFieldName("name")?.text;
-                if (nameNode === methodName) {
-                    const bodyNode = node.childForFieldName("body");
-                    if (bodyNode) {
-                        const statements = bodyNode.children;
-                        // Ensure the body has only [SyntaxNode, ReturnStatementNode, SyntaxNode] for get or  [SyntaxNode, ExpressionStatementNode, SyntaxNode] for set
-                        if (statements.length === 3) {
-                            // get the middle statment returnstatment or expressionstatment
-                            const statement = statements[1];
-                            if (statement.type === "expression_statement") {
-                                // get the return statment and gets its child which is field accesed so it is a set
-                                const returnValue = statement.childrenForFieldName("ExpressionStatementNode");
-                                if (returnValue) {
-                                    isAccessor = true;
-                                }
-                            }
-                            else if (statement.type === "return_statement") {
-                                // get the return statment and gets its child which is field accesed so it is a get
-                                const returnValue = statement.childrenForFieldName("FieldAccessNode");
-                                if (returnValue) {
-                                    isAccessor = true;
-                                }
-                            }
-                        }
-                    }
-                }
-                return isAccessor;
-            });
+    isAccessor(node, methodName) {
+        if (!methodName.startsWith("get") &&
+            !methodName.startsWith("Get") &&
+            !methodName.startsWith("set") &&
+            !methodName.startsWith("Set")) {
+            return false;
         }
-        return isAccessor;
+        const modifiers = this.extractMethodModifiers(node);
+        if (modifiers.includes("protected") || modifiers.includes("static")) {
+            return false;
+        }
+        const bodyNode = node.childForFieldName("body");
+        if (!bodyNode) {
+            return false;
+        }
+        const statements = bodyNode.namedChildren;
+        if (statements.length > 3) {
+            return false;
+        }
+        const controlStructures = bodyNode.descendantsOfType([
+            "if_statement",
+            "for_statement",
+            "while_statement",
+            "try_statement",
+            "switch_statement",
+        ]);
+        if (controlStructures.length > 0) {
+            return false;
+        }
+        if (methodName.startsWith("get") || methodName.startsWith("Get")) {
+            return bodyNode.text.includes("return");
+        }
+        else {
+            return bodyNode.text.includes("=");
+        }
     }
     getFieldsUsedInMethod(rootNode, MethodName) {
         const fieldsUsed = [];
