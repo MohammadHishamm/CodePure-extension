@@ -36,6 +36,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.javaParser = exports.pythonParser = exports.statusBarItem = exports.outputChannel = exports.customTreeProvider = exports.metricsSaver = exports.metricsNotifier = exports.servermetricsmanager = exports.FECFcode = void 0;
 exports.initializeExtension = initializeExtension;
 const vscode = __importStar(require("vscode"));
+const MongoDB_1 = require("./services/MongoDB");
 const MetricsNotifier_1 = require("./Core/MetricsNotifier");
 const MetricsSaver_1 = require("./Saver/MetricsSaver");
 const dashboard_1 = require("./dashboard");
@@ -51,12 +52,20 @@ exports.metricsNotifier = new MetricsNotifier_1.MetricsNotifier();
 exports.metricsSaver = new MetricsSaver_1.MetricsSaver(exports.metricsNotifier);
 exports.customTreeProvider = new dashboard_1.CustomTreeProvider();
 exports.metricsNotifier.addObserver(exports.customTreeProvider);
-// Shared components
+// Shared UI components
 exports.outputChannel = vscode.window.createOutputChannel("CodePure Output");
 exports.statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 1000);
 // Initialization function
-function initializeExtension(context) {
+async function initializeExtension(context) {
     console.log("Initializing CodePure...");
+    try {
+        const mongoService = MongoDB_1.MongoService.getInstance();
+        await mongoService.connect();
+    }
+    catch (err) {
+        console.error("❌ MongoDB connection failed:", err);
+        vscode.window.showErrorMessage("Failed to connect to MongoDB.");
+    }
     exports.servermetricsmanager.checkServerStatus();
     vscode.window.showInformationMessage("CodePure is now active! Use 'Ctrl+S' to detect CodeSmells.");
     exports.statusBarItem.text = "CodePure: Ready";

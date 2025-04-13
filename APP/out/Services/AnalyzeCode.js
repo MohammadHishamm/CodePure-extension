@@ -93,7 +93,7 @@ async function analyzeCode(document, sourceCode) {
                 vscode.window.showInformationMessage("Analysis is Finished.");
                 initialize_1.servermetricsmanager.sendMetricsFile();
                 // Detect code smells and suggest AI fixes
-                detectAndSuggestFixes(document, results);
+                // detectAndSuggestFixes(document, results);
                 // highlightBrainClassContributors(document,diagnosticCollection);
                 // highlightDataClass(document,diagnosticCollection);
                 // highlightGodClassContributors(document,diagnosticCollection);
@@ -130,54 +130,50 @@ async function calculateMetricsWithProgress(document, rootNode, sourceCode, lang
     }), document.fileName);
     return results.join("\n");
 }
-async function detectAndSuggestFixes(document, results) {
-    const diagnostics = [];
-    if (results.includes("WMC") && results.includes("LOC")) {
-        const fullRange = new vscode.Range(new vscode.Position(0, 0), new vscode.Position(document.lineCount - 1, document.lineAt(document.lineCount - 1).text.length));
-        // const diagnostic = new vscode.Diagnostic(
-        //   fullRange,
-        //   "Potential Brain Class detected. AI can suggest a fix.",
-        //   vscode.DiagnosticSeverity.Warning
-        // );
-        // diagnostic.code = "brainClass";
-        // diagnostic.source = "CodePure";
-        // diagnostics.push(diagnostic);
-        // Show notification with Quick AI Fix button
-        vscode.window
-            .showInformationMessage("CodePure detected a Brain Class! Want to apply a Quick AI Fix?", "✨ Quick AI Fix")
-            .then((selection) => {
-            if (selection === "✨ Quick AI Fix") {
-                vscode.commands.executeCommand("codepure.getAIFix", document);
-            }
-        });
-    }
-    diagnosticCollection.set(document.uri, diagnostics);
-}
-vscode.languages.registerCodeActionsProvider("*", {
-    provideCodeActions(document, range, context, token) {
-        const actions = [];
-        for (const diagnostic of context.diagnostics) {
-            if (diagnostic.code === "brainClass") {
-                const fixAction = new vscode.CodeAction("CodePure: ✨ Apply AI Fix for Brain Class", vscode.CodeActionKind.QuickFix);
-                fixAction.command = {
-                    command: "codepure.getAIFix",
-                    title: "Apply AI Fix",
-                    arguments: [document],
-                };
-                fixAction.diagnostics = [diagnostic];
-                actions.push(fixAction);
-            }
+async function suggestBrainClassFix(document) {
+    const fullRange = new vscode.Range(new vscode.Position(0, 0), new vscode.Position(document.lineCount - 1, document.lineAt(document.lineCount - 1).text.length));
+    vscode.window
+        .showInformationMessage("CodePure detected a Brain Class! Want to apply a Quick AI Fix?", "✨ Quick AI Fix")
+        .then(selection => {
+        if (selection === "✨ Quick AI Fix") {
+            vscode.commands.executeCommand("codepure.getBrainClassFix", document);
         }
-        return actions;
-    },
+    });
+}
+async function suggestGodClassFix(document) {
+    const fullRange = new vscode.Range(new vscode.Position(0, 0), new vscode.Position(document.lineCount - 1, document.lineAt(document.lineCount - 1).text.length));
+    vscode.window
+        .showInformationMessage("CodePure detected a God Class! Want to apply a Quick AI Fix?", "✨ Quick AI Fix")
+        .then(selection => {
+        if (selection === "✨ Quick AI Fix") {
+            vscode.commands.executeCommand("codepure.getGodClassFix", document);
+        }
+    });
+}
+async function suggestDataClassFix(document) {
+    const fullRange = new vscode.Range(new vscode.Position(0, 0), new vscode.Position(document.lineCount - 1, document.lineAt(document.lineCount - 1).text.length));
+    vscode.window
+        .showInformationMessage("CodePure detected a Data Class! Want to apply a Quick AI Fix?", "✨ Quick AI Fix")
+        .then(selection => {
+        if (selection === "✨ Quick AI Fix") {
+            vscode.commands.executeCommand("codepure.getDataClassFix", document);
+        }
+    });
+}
+vscode.commands.registerCommand("codepure.getBrainClassFix", async (document) => {
+    await applyAIFix(document, "Brain Class detected, Suggest a fix using code only. Do not include explanations, comments, or markdown. Respond with valid Java code only.");
 });
-vscode.commands.registerCommand("codepure.getAIFix", async (document) => {
-    if (!document)
-        return;
+vscode.commands.registerCommand("codepure.getGodClassFix", async (document) => {
+    await applyAIFix(document, "God Class detected, Suggest a fix using code only. Do not include explanations, comments, or markdown. Respond with valid Java code only.");
+});
+vscode.commands.registerCommand("codepure.getDataClassFix", async (document) => {
+    await applyAIFix(document, "Data Class detected, Suggest a fix using code only. Do not include explanations, comments, or markdown. Respond with valid Java code only.");
+});
+async function applyAIFix(document, issue) {
     vscode.window.showInformationMessage("Fetching AI fix suggestion...");
     const sourceCode = document.getText();
-    const issue = "Brain Class detected, suggest a fix.";
-    const fix = await (0, GoogleGemini_AI_1.getFixSuggestion)(sourceCode, issue);
+    const enhancedIssue = `${issue} Respond with Java code only. No explanations, comments, or formatting.`;
+    const fix = await (0, GoogleGemini_AI_1.getFixSuggestion)(sourceCode, enhancedIssue);
     if (fix) {
         const edit = new vscode.WorkspaceEdit();
         const fullRange = new vscode.Range(new vscode.Position(0, 0), new vscode.Position(document.lineCount, 0));
@@ -188,7 +184,7 @@ vscode.commands.registerCommand("codepure.getAIFix", async (document) => {
     else {
         vscode.window.showWarningMessage("No AI fix suggestion available.");
     }
-});
+}
 // Define highlight styles
 const wmcHighlightType = vscode.window.createTextEditorDecorationType({
     backgroundColor: "rgba(255, 255, 0, 0.4)", // Yellow for WMC
@@ -393,16 +389,19 @@ async function getModelPredictions(document, diagnosticCollection) {
     if (predictions["Brain Class"] === 1) {
         console.log("Detected Brain Class");
         highlightBrainClassContributors(document, diagnosticCollection);
+        await suggestBrainClassFix(document);
         response.predictions = [];
     }
     if (predictions["Data Class"] === 1) {
         console.log("Detected Data Class");
         highlightDataClass(document, diagnosticCollection);
+        await suggestDataClassFix(document);
         response.predictions = [];
     }
     if (predictions["God Class"] === 1) {
         console.log("Detected God Class");
         highlightGodClassContributors(document, diagnosticCollection);
+        await suggestGodClassFix(document);
         response.predictions = [];
     }
     // If no smells were detected (all values were 0)

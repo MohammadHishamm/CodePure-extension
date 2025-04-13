@@ -6,6 +6,7 @@ import { GitHubAPI } from "./services/GithubAPI";
 import { Observer } from "./Core/MetricsObserver";
 import { MetricsFileFormat } from "./Interface/MetricsFileFormat";
 import { ServerMetricsManager } from "./services/ServerMetricsManager";
+import { MongoService } from "./services/MongoDB"; // Adjust the path as needed
 
 export class CustomTreeProvider implements vscode.TreeDataProvider<TreeItem>, Observer {
   private _onDidChangeTreeData: vscode.EventEmitter<TreeItem | undefined | null | void> = new vscode.EventEmitter();
@@ -219,49 +220,106 @@ export class CustomTreeProvider implements vscode.TreeDataProvider<TreeItem>, Ob
 }
 
 
-  async syncWithDatabase(owner: string) {
-    try {
-      const session = await vscode.authentication.getSession("github", ["repo", "user"], { createIfNone: false });
-      if (!session) {
-        vscode.window.showErrorMessage("GitHub authentication required for syncing.");
-        return;
-      }
 
-      const currentUser = session.account.label;
 
-      if (currentUser !== owner) {
-        vscode.window.showErrorMessage("Only the repository owner can sync with the database.");
-        return;
-      }
 
-      const reason = "Syncing will allow CodePure to analyze and store code smell metrics, making them available for all repository users.";
 
-      const userChoice = await vscode.window.showInformationMessage(
-        `${reason}\n\nDo you want to proceed with the sync?`,
-        { modal: true },
-        "Yes", "No"
-      );
-
-      if (userChoice !== "Yes") {
-        vscode.window.showInformationMessage("Sync canceled.");
-        return;
-      }
-
-      vscode.window.showInformationMessage("Syncing with the database...");
-
-      const currentRepo = await this.GithubApi.getCurrentRepository();
-      if (!currentRepo) {
-        vscode.window.showErrorMessage("No repository found to sync.");
-        return;
-      }
-
-      vscode.window.showInformationMessage(`Successfully synced ${currentRepo} with the database.`);
-
-    } catch (error) {
-      console.error("Sync error:", error);
-      vscode.window.showErrorMessage("An error occurred while syncing with the database.");
+async syncWithDatabase(owner: string) {
+  try {
+    const session = await vscode.authentication.getSession("github", ["repo", "user"], { createIfNone: false });
+    if (!session) {
+      vscode.window.showErrorMessage("GitHub authentication required for syncing.");
+      return;
     }
+
+    const currentUser = session.account.label;
+
+    if (currentUser !== owner) {
+      vscode.window.showErrorMessage("Only the repository owner can sync with the database.");
+      return;
+    }
+
+    const reason = "Syncing will allow CodePure to analyze and store code smell metrics, making them available for all repository users.";
+
+    const userChoice = await vscode.window.showInformationMessage(
+      `${reason}\n\nDo you want to proceed with the sync?`,
+      { modal: true },
+      "Yes", "No"
+    );
+
+    if (userChoice !== "Yes") {
+      vscode.window.showInformationMessage("Sync canceled.");
+      return;
+    }
+
+    vscode.window.showInformationMessage("Syncing with the database...");
+
+    const treeItems = await this.GithubApi.fetchRepositoriesTreeItems();
+
+    // Convert tree items into a JSON-friendly format
+    const dataToStore = treeItems.map(item => ({
+      label: item.label,
+      tooltip: item.tooltip,
+      description: item.description,
+      children: item.children?.map(child => ({
+        label: child.label,
+        tooltip: child.tooltip,
+        description: child.description,
+      })) || []
+    }));
+
+   // Connect to MongoDB
+const mongo = MongoService.getInstance();
+await mongo.connect();
+const db = mongo.getDb();
+
+const usersCollection = db.collection("Users");
+const reposCollection = db.collection("Repos");
+
+// Collect contributors from tree items
+const contributorUsernames = new Set<string>();
+for (const item of treeItems) {
+  item.children?.forEach(child => {
+    if (child.label) {
+      const match = child.label.match(/(?:\(Me\) )?([\w-]+)/); // extract GitHub username
+      if (match) {
+        contributorUsernames.add(match[1]);
+      }
+    }
+  });
+}
+
+// Add the current user explicitly too
+contributorUsernames.add(currentUser);
+
+// Save or update all contributors
+const bulkOps = Array.from(contributorUsernames).map(username => ({
+  updateOne: {
+    filter: { username },
+    update: {
+      $set: { username, lastSeen: new Date() }
+    },
+    upsert: true
   }
+}));
+await usersCollection.bulkWrite(bulkOps);
+
+// Save repository info (linked to owner)
+await reposCollection.insertOne({
+  owner: currentUser,
+  syncedAt: new Date(),
+  repositories: dataToStore,
+});
+
+vscode.window.showInformationMessage("✅ Users and repository info synced successfully!");
+
+
+  } catch (error) {
+    console.error("❌ Sync error:", error);
+    vscode.window.showErrorMessage("An error occurred while syncing with the database.");
+  }
+}
+
 
 
   refresh(): void {

@@ -1,4 +1,5 @@
 import * as vscode from "vscode";
+import { MongoService } from "./services/MongoDB";
 
 import { MetricsNotifier } from "./Core/MetricsNotifier";
 import { MetricsSaver } from "./Saver/MetricsSaver";
@@ -15,15 +16,23 @@ export const metricsSaver = new MetricsSaver(metricsNotifier);
 export const customTreeProvider = new CustomTreeProvider();
 metricsNotifier.addObserver(customTreeProvider);
 
-// Shared components
+// Shared UI components
 export const outputChannel: vscode.OutputChannel =
   vscode.window.createOutputChannel("CodePure Output");
 export const statusBarItem: vscode.StatusBarItem =
   vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 1000);
 
 // Initialization function
-export function initializeExtension(context: vscode.ExtensionContext) {
+export async function initializeExtension(context: vscode.ExtensionContext) {
   console.log("Initializing CodePure...");
+
+  try {
+    const mongoService = MongoService.getInstance();
+    await mongoService.connect();
+  } catch (err) {
+    console.error("❌ MongoDB connection failed:", err);
+    vscode.window.showErrorMessage("Failed to connect to MongoDB.");
+  }
 
   servermetricsmanager.checkServerStatus();
 

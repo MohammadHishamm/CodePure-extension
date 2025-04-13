@@ -40,6 +40,7 @@ const vscode = __importStar(require("vscode"));
 const TreeItem_1 = require("./TreeItem");
 const GithubAPI_1 = require("./services/GithubAPI");
 const ServerMetricsManager_1 = require("./services/ServerMetricsManager");
+const MongoDB_1 = require("./services/MongoDB"); // Adjust the path as needed
 class CustomTreeProvider {
     _onDidChangeTreeData = new vscode.EventEmitter();
     onDidChangeTreeData = this._onDidChangeTreeData.event;
@@ -221,15 +222,59 @@ class CustomTreeProvider {
                 return;
             }
             vscode.window.showInformationMessage("Syncing with the database...");
-            const currentRepo = await this.GithubApi.getCurrentRepository();
-            if (!currentRepo) {
-                vscode.window.showErrorMessage("No repository found to sync.");
-                return;
+            const treeItems = await this.GithubApi.fetchRepositoriesTreeItems();
+            // Convert tree items into a JSON-friendly format
+            const dataToStore = treeItems.map(item => ({
+                label: item.label,
+                tooltip: item.tooltip,
+                description: item.description,
+                children: item.children?.map(child => ({
+                    label: child.label,
+                    tooltip: child.tooltip,
+                    description: child.description,
+                })) || []
+            }));
+            // Connect to MongoDB
+            const mongo = MongoDB_1.MongoService.getInstance();
+            await mongo.connect();
+            const db = mongo.getDb();
+            const usersCollection = db.collection("Users");
+            const reposCollection = db.collection("Repos");
+            // Collect contributors from tree items
+            const contributorUsernames = new Set();
+            for (const item of treeItems) {
+                item.children?.forEach(child => {
+                    if (child.label) {
+                        const match = child.label.match(/(?:\(Me\) )?([\w-]+)/); // extract GitHub username
+                        if (match) {
+                            contributorUsernames.add(match[1]);
+                        }
+                    }
+                });
             }
-            vscode.window.showInformationMessage(`Successfully synced ${currentRepo} with the database.`);
+            // Add the current user explicitly too
+            contributorUsernames.add(currentUser);
+            // Save or update all contributors
+            const bulkOps = Array.from(contributorUsernames).map(username => ({
+                updateOne: {
+                    filter: { username },
+                    update: {
+                        $set: { username, lastSeen: new Date() }
+                    },
+                    upsert: true
+                }
+            }));
+            await usersCollection.bulkWrite(bulkOps);
+            // Save repository info (linked to owner)
+            await reposCollection.insertOne({
+                owner: currentUser,
+                syncedAt: new Date(),
+                repositories: dataToStore,
+            });
+            vscode.window.showInformationMessage("✅ Users and repository info synced successfully!");
         }
         catch (error) {
-            console.error("Sync error:", error);
+            console.error("❌ Sync error:", error);
             vscode.window.showErrorMessage("An error occurred while syncing with the database.");
         }
     }
