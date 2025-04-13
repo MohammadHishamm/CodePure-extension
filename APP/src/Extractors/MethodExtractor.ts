@@ -54,7 +54,6 @@ export class MethodExtractor {
     node: Parser.SyntaxNode,
     bodyStatements: string[]
   ) {
-
     if (node.type === "if_statement") {
       bodyStatements.push(node.type);
     } else if (node.type === "for_statement") {
@@ -263,16 +262,16 @@ export class MethodExtractor {
 
   private isAbstractMethod(methodNode: Parser.SyntaxNode): boolean {
     const modifierNodes = methodNode.descendantsOfType("modifiers");
-  
+
     for (const modNode of modifierNodes) {
       if (modNode.text.includes("abstract")) {
         return true;
       }
     }
-  
+
     return false;
   }
-   
+
   private findParentClass(
     node: Parser.SyntaxNode,
     classes: ClassInfo[]
@@ -283,6 +282,7 @@ export class MethodExtractor {
   }
 
   public isAccessor(node: Parser.SyntaxNode, methodName: string): boolean {
+    // Check if the method name follows accessor naming pattern
     if (
       !methodName.startsWith("get") &&
       !methodName.startsWith("Get") &&
@@ -292,6 +292,7 @@ export class MethodExtractor {
       return false;
     }
 
+    // Check method modifiers
     const modifiers = this.extractMethodModifiers(node);
     if (modifiers.includes("protected") || modifiers.includes("static")) {
       return false;
@@ -303,10 +304,18 @@ export class MethodExtractor {
     }
 
     const statements = bodyNode.namedChildren;
-    if (statements.length > 3) {
+
+    // More strict check for statement count (only 1 for getters)
+    if (
+      (methodName.startsWith("get") || methodName.startsWith("Get")) &&
+      statements.length > 1
+    ) {
+      return false;
+    } else if (statements.length > 3) {
       return false;
     }
 
+    // Check for control structures
     const controlStructures = bodyNode.descendantsOfType([
       "if_statement",
       "for_statement",
@@ -319,11 +328,35 @@ export class MethodExtractor {
       return false;
     }
 
+    // Check for new object creation in getters
     if (methodName.startsWith("get") || methodName.startsWith("Get")) {
-      return bodyNode.text.includes("return");
+      // If a getter contains "new" keyword or has variable declarations, it's not a pure accessor
+      if (
+        bodyNode.text.includes("new ") ||
+        this.hasLocalVariableDeclarations(bodyNode)
+      ) {
+        return false;
+      }
+
+      // Simple getter should only contain a return statement with the field
+      return (
+        bodyNode.text.includes("return") &&
+        !bodyNode.text.includes("return new")
+      );
     } else {
+      // For setters
       return bodyNode.text.includes("=");
     }
+  }
+
+  // Helper method to check for local variable declarations
+  private hasLocalVariableDeclarations(bodyNode: Parser.SyntaxNode): boolean {
+    const localVariableDeclarations = bodyNode.descendantsOfType([
+      "local_variable_declaration",
+      "variable_declaration",
+    ]);
+
+    return localVariableDeclarations.length > 0;
   }
 
   public getFieldsUsedInMethod(
@@ -331,7 +364,7 @@ export class MethodExtractor {
     methodName: string
   ): string[] {
     const fieldsUsed: Set<string> = new Set();
-  
+
     // First, collect declared variables in this method (to avoid confusion with fields)
     const declaredLocalVars = new Set<string>();
     rootNode.descendantsOfType("variable_declarator").forEach((varNode) => {
@@ -340,23 +373,22 @@ export class MethodExtractor {
         declaredLocalVars.add(identifierNode.text);
       }
     });
-  
+
     // Traverse all identifiers in the method body
     const bodyNode = rootNode.childForFieldName("body");
     if (bodyNode) {
       bodyNode.descendantsOfType("identifier").forEach((idNode) => {
         const name = idNode.text;
-  
+
         // If it's not a local variable AND not the method name itself
         if (!declaredLocalVars.has(name) && name !== methodName) {
           fieldsUsed.add(name);
         }
       });
     }
-  
+
     return Array.from(fieldsUsed);
   }
-  
 
   private extractMethodAnnotations(node: Parser.SyntaxNode): string[] {
     const annotations: string[] = [];

@@ -27,10 +27,10 @@ class FieldExtractor {
                 }
             }
             // A field is only encapsulated if:
-            // 1. It's not public (must be private or protected) AND
+            // 1. It's private (not public or protected) AND
             // 2. It has either a getter or setter method
             const hasAccessor = this.hasGetterSetter(name, methods);
-            isEncapsulated = modifiers.toLowerCase() !== "public" && hasAccessor;
+            isEncapsulated = modifiers.toLowerCase() === "private" && hasAccessor;
             return {
                 name,
                 type,

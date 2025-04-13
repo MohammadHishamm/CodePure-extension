@@ -241,12 +241,14 @@ class MethodExtractor {
         return classes.find((classInfo) => classInfo.name === className) ?? null;
     }
     isAccessor(node, methodName) {
+        // Check if the method name follows accessor naming pattern
         if (!methodName.startsWith("get") &&
             !methodName.startsWith("Get") &&
             !methodName.startsWith("set") &&
             !methodName.startsWith("Set")) {
             return false;
         }
+        // Check method modifiers
         const modifiers = this.extractMethodModifiers(node);
         if (modifiers.includes("protected") || modifiers.includes("static")) {
             return false;
@@ -256,9 +258,15 @@ class MethodExtractor {
             return false;
         }
         const statements = bodyNode.namedChildren;
-        if (statements.length > 3) {
+        // More strict check for statement count (only 1 for getters)
+        if ((methodName.startsWith("get") || methodName.startsWith("Get")) &&
+            statements.length > 1) {
             return false;
         }
+        else if (statements.length > 3) {
+            return false;
+        }
+        // Check for control structures
         const controlStructures = bodyNode.descendantsOfType([
             "if_statement",
             "for_statement",
@@ -269,28 +277,52 @@ class MethodExtractor {
         if (controlStructures.length > 0) {
             return false;
         }
+        // Check for new object creation in getters
         if (methodName.startsWith("get") || methodName.startsWith("Get")) {
-            return bodyNode.text.includes("return");
+            // If a getter contains "new" keyword or has variable declarations, it's not a pure accessor
+            if (bodyNode.text.includes("new ") ||
+                this.hasLocalVariableDeclarations(bodyNode)) {
+                return false;
+            }
+            // Simple getter should only contain a return statement with the field
+            return (bodyNode.text.includes("return") &&
+                !bodyNode.text.includes("return new"));
         }
         else {
+            // For setters
             return bodyNode.text.includes("=");
         }
     }
-    getFieldsUsedInMethod(rootNode, MethodName) {
-        const fieldsUsed = [];
-        const accessNodes = rootNode.descendantsOfType("variable_declarator");
-        accessNodes.forEach((accessNode) => {
-            const fieldName = accessNode.text;
-            if (fieldName &&
-                !fieldsUsed.includes(fieldName) &&
-                fieldName !== MethodName) {
-                const identifierNode = accessNode.children.find((subChild) => subChild.type === "identifier");
-                if (identifierNode) {
-                    fieldsUsed.push(identifierNode.text); // Add unique field names accessed
-                }
+    // Helper method to check for local variable declarations
+    hasLocalVariableDeclarations(bodyNode) {
+        const localVariableDeclarations = bodyNode.descendantsOfType([
+            "local_variable_declaration",
+            "variable_declaration",
+        ]);
+        return localVariableDeclarations.length > 0;
+    }
+    getFieldsUsedInMethod(rootNode, methodName) {
+        const fieldsUsed = new Set();
+        // First, collect declared variables in this method (to avoid confusion with fields)
+        const declaredLocalVars = new Set();
+        rootNode.descendantsOfType("variable_declarator").forEach((varNode) => {
+            const identifierNode = varNode.childForFieldName("name");
+            if (identifierNode) {
+                declaredLocalVars.add(identifierNode.text);
             }
         });
-        return fieldsUsed;
+        // Traverse all identifiers in the method body
+        const bodyNode = rootNode.childForFieldName("body");
+        if (bodyNode) {
+            bodyNode.descendantsOfType("identifier").forEach((idNode) => {
+                const name = idNode.text;
+                // If it's not a local variable AND not the method name itself
+                if (!declaredLocalVars.has(name) && name !== methodName) {
+                    fieldsUsed.add(name);
+                }
+            });
+        }
+        return Array.from(fieldsUsed);
     }
     extractMethodAnnotations(node) {
         const annotations = [];
