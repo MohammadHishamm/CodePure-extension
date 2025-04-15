@@ -1,0 +1,76 @@
+[
+  {
+    "fullPath": "c:\\Users\\PC\\Desktop\\eclipse-integration-tcserver-main111\\eclipse-integration-tcserver-main\\com.vmware.vfabric.ide.eclipse.tcserver.core\\src\\com\\vmware\\vfabric\\ide\\eclipse\\tcserver\\internal\\core\\TcServer.java",
+    "folderName": "core/TcServer.java",
+    "metrics": [
+      {
+        "name": "LOC",
+        "value": 458
+      },
+      {
+        "name": "AMW",
+        "value": 1.8409090909090908
+      },
+      {
+        "name": "CBO",
+        "value": 6
+      },
+      {
+        "name": "FDP",
+        "value": 6
+      },
+      {
+        "name": "DAC",
+        "value": 1
+      },
+      {
+        "name": "WMC",
+        "value": 81
+      },
+      {
+        "name": "WOC",
+        "value": 0.5344827586206897
+      },
+      {
+        "name": "NOA",
+        "value": 21
+      },
+      {
+        "name": "NOM",
+        "value": 44
+      },
+      {
+        "name": "NOAM",
+        "value": 11
+      },
+      {
+        "name": "NOPA",
+        "value": 16
+      },
+      {
+        "name": "NAbsm",
+        "value": 0
+      },
+      {
+        "name": "NProtM",
+        "value": 1
+      },
+      {
+        "name": "NAS",
+        "value": 0
+      },
+      {
+        "name": "PNAS",
+        "value": -1
+      },
+      {
+        "name": "TCC",
+        "value": 0.02
+      },
+      {
+        "name": "DIT",
+        "value": 0
+      }
+    ]
+  }
+]

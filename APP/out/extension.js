@@ -39,6 +39,8 @@ const vscode = __importStar(require("vscode"));
 const initialize_1 = require("./initialize");
 const commands_1 = require("./commands");
 const events_1 = require("./events");
+const AnalyzeCode_1 = require("./services/AnalyzeCode");
+// Import the cleanup function
 async function activate(context) {
     console.time("Extension Execution Time");
     // Initialize extension components
@@ -52,7 +54,10 @@ async function activate(context) {
     console.timeEnd("Extension Execution Time");
 }
 async function deactivate() {
+    // Clean up all metrics JSON files
+    (0, AnalyzeCode_1.cleanupMetricsFiles)();
+    // Keep the existing FECF cleanup
     await initialize_1.FECFcode.deleteAllResultsFiles();
-    console.log("CodePure extension is now deactivated.");
+    console.log("CodePure extension is now deactivated and all metrics files cleaned up.");
 }
 //# sourceMappingURL=extension.js.map

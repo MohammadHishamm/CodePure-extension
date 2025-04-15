@@ -33,10 +33,11 @@ var __importStar = (this && this.__importStar) || (function () {
     };
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
+exports.cleanupMetricsFiles = cleanupMetricsFiles;
 exports.analyzeCode = analyzeCode;
 const vscode = __importStar(require("vscode"));
 const MetricsFactory_1 = require("../Factory/MetricsFactory");
-const ServerMetricsManager_1 = require("./ServerMetricsManager"); // Ensure correct import path
+const ServerMetricsManager_1 = require("./ServerMetricsManager");
 const initialize_1 = require("../initialize");
 const utils_1 = require("../utils");
 const GoogleGemini_AI_1 = require("./GoogleGemini_AI");
@@ -44,6 +45,71 @@ const fs = __importStar(require("fs"));
 const path = __importStar(require("path"));
 let isAnalyzing = false;
 const diagnosticCollection = vscode.languages.createDiagnosticCollection("codepure");
+// Utility function to get the metrics file path for a specific document
+function getMetricsFilePath(document) {
+    const fileName = path.basename(document.fileName, path.extname(document.fileName));
+    let filePath = path.join(__dirname, "..", "src", "Results", `${fileName}.json`);
+    // Handle the "out" directory in the path
+    filePath = filePath.replace(/out[\\\/]?/, "");
+    return filePath;
+}
+let createdMetricsFiles = [];
+// Function to save metrics to individual files
+function saveMetricsToIndividualFile(filePath, metricsArray) {
+    try {
+        // Extract file name without extension
+        const fileName = path.basename(filePath, path.extname(filePath));
+        // Create metrics data object
+        const metricsData = {
+            fullPath: filePath,
+            folderName: path.relative(vscode.workspace.rootPath || "", filePath),
+            metrics: metricsArray,
+        };
+        // Create directory if it doesn't exist
+        let resultsDir = path.join(__dirname, "..", "src", "Results");
+        // Handle the "out" directory in the path
+        resultsDir = resultsDir.replace(/out[\\\/]?/, "");
+        if (!fs.existsSync(resultsDir)) {
+            fs.mkdirSync(resultsDir, { recursive: true });
+        }
+        // Save metrics to individual JSON file
+        const outputFilePath = path.join(resultsDir, `${fileName}.json`);
+        fs.writeFileSync(outputFilePath, JSON.stringify(metricsData, null, 2), "utf-8");
+        // Add the file path to our tracking array
+        createdMetricsFiles.push(outputFilePath);
+        console.log(`Metrics saved to ${outputFilePath}`);
+    }
+    catch (error) {
+        console.error(`Error saving metrics to individual file: ${error}`);
+    }
+}
+function cleanupMetricsFiles() {
+    try {
+        // Delete all tracked metrics files
+        for (const filePath of createdMetricsFiles) {
+            if (fs.existsSync(filePath)) {
+                fs.unlinkSync(filePath);
+                console.log(`Deleted metrics file: ${filePath}`);
+            }
+        }
+        // Clear the tracking array
+        createdMetricsFiles = [];
+        // Optionally, try to remove the Results directory if it's empty
+        const resultsDir = path
+            .join(__dirname, "..", "src", "Results")
+            .replace(/out[\\\/]?/, "");
+        if (fs.existsSync(resultsDir)) {
+            const files = fs.readdirSync(resultsDir);
+            if (files.length === 0) {
+                fs.rmdirSync(resultsDir);
+                console.log(`Removed empty Results directory: ${resultsDir}`);
+            }
+        }
+    }
+    catch (error) {
+        console.error(`Error cleaning up metrics files: ${error}`);
+    }
+}
 async function analyzeCode(document, sourceCode) {
     if (isAnalyzing) {
         vscode.window.showInformationMessage("Analysis is already running. Please wait...");
@@ -91,7 +157,9 @@ async function analyzeCode(document, sourceCode) {
             const results = await calculateMetricsWithProgress(document, rootNode, sourceCode, document.languageId, metricsToCalculate, progress);
             if (results) {
                 vscode.window.showInformationMessage("Analysis is Finished.");
-                initialize_1.servermetricsmanager.sendMetricsFile();
+                // Send the metrics for the current file to the server
+                const metricsFilePath = getMetricsFilePath(document);
+                initialize_1.servermetricsmanager.sendMetricsFile(metricsFilePath);
                 // Detect code smells and suggest AI fixes
                 // detectAndSuggestFixes(document, results);
                 // highlightBrainClassContributors(document,diagnosticCollection);
@@ -111,11 +179,16 @@ async function analyzeCode(document, sourceCode) {
 }
 async function calculateMetricsWithProgress(document, rootNode, sourceCode, languageId, metrics, progress) {
     const results = [];
+    const metricsObjects = [];
     for (const [index, metricName] of metrics.entries()) {
         const metricCalculator = MetricsFactory_1.MetricsFactory.CreateMetric(metricName, languageId);
         if (metricCalculator) {
             const value = metricCalculator.calculate(rootNode, initialize_1.FECFcode, document.fileName);
             results.push(`${metricName}: ${value}`);
+            metricsObjects.push({
+                name: metricName,
+                value: parseFloat(value.toString()),
+            });
             // Update progress
             progress.report({
                 message: `Calculating ${metricName}...`,
@@ -124,17 +197,15 @@ async function calculateMetricsWithProgress(document, rootNode, sourceCode, lang
             await (0, utils_1.pause)(300);
         }
     }
-    initialize_1.metricsSaver.saveMetrics(results.map((result) => {
-        const [name, value] = result.split(": ");
-        return { name, value: parseFloat(value) };
-    }), document.fileName);
+    // Save metrics to an individual file named after the source file
+    saveMetricsToIndividualFile(document.fileName, metricsObjects);
     return results.join("\n");
 }
 async function suggestBrainClassFix(document) {
     const fullRange = new vscode.Range(new vscode.Position(0, 0), new vscode.Position(document.lineCount - 1, document.lineAt(document.lineCount - 1).text.length));
     vscode.window
         .showInformationMessage("CodePure detected a Brain Class! Want to apply a Quick AI Fix?", "✨ Quick AI Fix")
-        .then(selection => {
+        .then((selection) => {
         if (selection === "✨ Quick AI Fix") {
             vscode.commands.executeCommand("codepure.getBrainClassFix", document);
         }
@@ -144,7 +215,7 @@ async function suggestGodClassFix(document) {
     const fullRange = new vscode.Range(new vscode.Position(0, 0), new vscode.Position(document.lineCount - 1, document.lineAt(document.lineCount - 1).text.length));
     vscode.window
         .showInformationMessage("CodePure detected a God Class! Want to apply a Quick AI Fix?", "✨ Quick AI Fix")
-        .then(selection => {
+        .then((selection) => {
         if (selection === "✨ Quick AI Fix") {
             vscode.commands.executeCommand("codepure.getGodClassFix", document);
         }
@@ -154,7 +225,7 @@ async function suggestDataClassFix(document) {
     const fullRange = new vscode.Range(new vscode.Position(0, 0), new vscode.Position(document.lineCount - 1, document.lineAt(document.lineCount - 1).text.length));
     vscode.window
         .showInformationMessage("CodePure detected a Data Class! Want to apply a Quick AI Fix?", "✨ Quick AI Fix")
-        .then(selection => {
+        .then((selection) => {
         if (selection === "✨ Quick AI Fix") {
             vscode.commands.executeCommand("codepure.getDataClassFix", document);
         }
@@ -201,27 +272,18 @@ const wocHighlightType = vscode.window.createTextEditorDecorationType({
 const tccHighlightType = vscode.window.createTextEditorDecorationType({
     backgroundColor: "rgba(0, 255, 255, 0.3)", // Cyan for TCC
 });
-// Path to the JSON file
-let METRICS_FILE_PATH = path.join(__dirname, "..", "..", "src", "Results", "MetricsCalculated.json");
 async function highlightBrainClassContributors(document, diagnosticCollection) {
-    if (!fs.existsSync(METRICS_FILE_PATH)) {
-        console.error("Metrics JSON file not found:", METRICS_FILE_PATH);
+    const metricsFilePath = getMetricsFilePath(document);
+    if (!fs.existsSync(metricsFilePath)) {
+        console.error("Metrics JSON file not found:", metricsFilePath);
         return;
     }
-    const fileContent = fs.readFileSync(METRICS_FILE_PATH, "utf-8");
-    const metricsData = JSON.parse(fileContent);
-    // Find metrics for the current file
-    const fileMetrics = metricsData.find((entry) => entry.fullPath === document.fileName);
-    if (!fileMetrics) {
-        console.warn("No metrics found for file:", document.fileName);
-        return;
-    }
+    const fileContent = fs.readFileSync(metricsFilePath, "utf-8");
+    const fileMetrics = JSON.parse(fileContent);
     // Extract LOC & WMC
     const LOC = fileMetrics.metrics.find((m) => m.name === "LOC")?.value || 0;
     const WMC = fileMetrics.metrics.find((m) => m.name === "WMC")?.value || 0;
-    console.log("File Path:", METRICS_FILE_PATH);
-    console.log("File Content:", fileContent);
-    console.log("Found Metrics:", fileMetrics);
+    console.log("File Path:", metricsFilePath);
     console.log(`Extracted LOC: ${LOC}, WMC: ${WMC}`);
     const diagnostics = [];
     const wmcRanges = [];
@@ -258,17 +320,13 @@ async function highlightBrainClassContributors(document, diagnosticCollection) {
     }
 }
 async function highlightDataClass(document, diagnosticCollection) {
-    if (!fs.existsSync(METRICS_FILE_PATH)) {
-        console.error("Metrics JSON file not found:", METRICS_FILE_PATH);
+    const metricsFilePath = getMetricsFilePath(document);
+    if (!fs.existsSync(metricsFilePath)) {
+        console.error("Metrics JSON file not found:", metricsFilePath);
         return;
     }
-    const fileContent = fs.readFileSync(METRICS_FILE_PATH, "utf-8");
-    const metricsData = JSON.parse(fileContent);
-    const fileMetrics = metricsData.find((entry) => entry.fullPath === document.fileName);
-    if (!fileMetrics) {
-        console.warn("No metrics found for file:", document.fileName);
-        return;
-    }
+    const fileContent = fs.readFileSync(metricsFilePath, "utf-8");
+    const fileMetrics = JSON.parse(fileContent);
     const WOC = fileMetrics.metrics.find((m) => m.name === "WOC")?.value || 1;
     const NOPA = fileMetrics.metrics.find((m) => m.name === "NOPA")?.value || 0;
     const NOAM = fileMetrics.metrics.find((m) => m.name === "NOAM")?.value || 0;
@@ -320,17 +378,13 @@ async function highlightDataClass(document, diagnosticCollection) {
     }
 }
 async function highlightGodClassContributors(document, diagnosticCollection) {
-    if (!fs.existsSync(METRICS_FILE_PATH)) {
-        console.error("Metrics JSON file not found:", METRICS_FILE_PATH);
+    const metricsFilePath = getMetricsFilePath(document);
+    if (!fs.existsSync(metricsFilePath)) {
+        console.error("Metrics JSON file not found:", metricsFilePath);
         return;
     }
-    const fileContent = fs.readFileSync(METRICS_FILE_PATH, "utf-8");
-    const metricsData = JSON.parse(fileContent);
-    const fileMetrics = metricsData.find((entry) => entry.fullPath === document.fileName);
-    if (!fileMetrics) {
-        console.warn("No metrics found for file:", document.fileName);
-        return;
-    }
+    const fileContent = fs.readFileSync(metricsFilePath, "utf-8");
+    const fileMetrics = JSON.parse(fileContent);
     const WMC = fileMetrics.metrics.find((m) => m.name === "WMC")?.value || 0;
     const TCC = fileMetrics.metrics.find((m) => m.name === "TCC")?.value || 1;
     console.log("Extracted WMC:", WMC, "TCC:", TCC);
@@ -377,8 +431,14 @@ async function highlightGodClassContributors(document, diagnosticCollection) {
 }
 async function getModelPredictions(document, diagnosticCollection) {
     const serverManager = new ServerMetricsManager_1.ServerMetricsManager();
+    // Get the metrics file path for the current document
+    const metricsFilePath = getMetricsFilePath(document);
+    if (!fs.existsSync(metricsFilePath)) {
+        console.error("Metrics JSON file not found:", metricsFilePath);
+        return;
+    }
     // Send metrics file and get response
-    const response = await serverManager.sendMetricsFile();
+    const response = await serverManager.sendMetricsFile(metricsFilePath);
     if (!response || !response.predictions || response.predictions.length === 0) {
         console.log("No predictions received.");
         return;
