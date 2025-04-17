@@ -45,8 +45,10 @@ export class UMLDashboard {
   }
 
   private _getExtractedUML(): any {
-    const filePath = path.join(__dirname, "..", "src", "Results", "ExtractedClasses.json").replace(/out[\\\/]?/, "");
-    
+    const filePath = path
+      .join(__dirname, "..", "src", "Uml", "ExtractedClasses.json")
+      .replace(/out[\\\/]?/, "");
+
     if (fs.existsSync(filePath)) {
       try {
         const rawData = fs.readFileSync(filePath, "utf8");
@@ -60,38 +62,38 @@ export class UMLDashboard {
     return { nodes: [], edges: [] };
   }
 
-  private _convertToMermaid(umlData: any): string 
-  {
-    
+  private _convertToMermaid(umlData: any): string {
     let mermaidCode = "classDiagram\n";
-  
+
     const classMembers: Record<string, string[]> = {};
-  
+
     for (const node of umlData.nodes) {
       const nodeId = node.data.id;
       const nodeLabel = node.data.label;
-  
+
       // Detect fields
       if (nodeLabel.startsWith("Field: ")) {
-        const [fieldName, fieldType] = nodeLabel.replace("Field: ", "").split(" : ");
-        const className = nodeId.split(".")[0]; 
+        const [fieldName, fieldType] = nodeLabel
+          .replace("Field: ", "")
+          .split(" : ");
+        const className = nodeId.split(".")[0];
         if (!classMembers[className]) classMembers[className] = [];
         classMembers[className].push(`  - ${fieldName}: ${fieldType}`);
       }
-  
+
       // Detect methods
       else if (nodeLabel.startsWith("Method: ")) {
-        const methodSignature = nodeLabel.replace("Method: ", "+ "); 
+        const methodSignature = nodeLabel.replace("Method: ", "+ ");
         const className = nodeId.split(".")[0];
         if (!classMembers[className]) classMembers[className] = [];
         classMembers[className].push(`  ${methodSignature}`);
       }
     }
-  
+
     // Add classes and their members
     for (const node of umlData.nodes) {
       // Lw Class
-      if (!node.data.id.includes(".")) { 
+      if (!node.data.id.includes(".")) {
         const className = node.data.id;
         if (classMembers[className] && classMembers[className].length > 0) {
           mermaidCode += `  class ${className} {\n`;
@@ -102,7 +104,7 @@ export class UMLDashboard {
         }
       }
     }
-  
+
     // Add relationships
     for (const edge of umlData.edges) {
       if (edge.data.label === "inherits") {
@@ -116,8 +118,7 @@ export class UMLDashboard {
 
     return mermaidCode;
   }
-  
-  
+
   private _getHtmlForWebview(mermaidCode: string): string {
     return `
       <!DOCTYPE html>
@@ -326,9 +327,4 @@ export class UMLDashboard {
       </html>
     `;
   }
-  
-  
-  
-  
-  
 }
