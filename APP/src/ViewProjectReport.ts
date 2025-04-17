@@ -48,36 +48,100 @@ export class DashboardPanel {
 
   private _getFileNames(): string[] {
     const metricsData = this._getMetricsData();
-    return metricsData.map((file: { folderName: string }) => file.folderName); // Fixed the map function here
+    return metricsData.map((file) => file.folderName);
   }
 
   private _getMetricsData() {
-    const filePath = path.join(__dirname, "..", "src", "Results", "MetricsCalculated.json");
+    let resultsDir = path
+      .join(__dirname, "..", "src", "Results")
+      .replace(/out[\\\/]?/, "");
+
+    console.log(`Fetching metrics from directory: ${resultsDir}`);
+
+    if (!fs.existsSync(resultsDir)) {
+      console.error("Results directory does not exist.");
+      return [];
+    }
 
     try {
-      if (fs.existsSync(filePath)) {
-        const data = fs.readFileSync(filePath, "utf8");
-        return data ? JSON.parse(data) : [];
+      // Read all files in the Results directory
+      console.log(`Reading directory contents of: ${resultsDir}`);
+      const allFiles = fs.readdirSync(resultsDir);
+      console.log(`All files in directory: ${allFiles.join(", ")}`);
+
+      // Filter for JSON files only
+      const files = allFiles.filter((file) => file.endsWith(".json"));
+
+      if (files.length === 0) {
+        console.log("No metrics files found in directory.");
+        return [];
       }
-      return [];
+
+      console.log(`Found ${files.length} metrics files: ${files.join(", ")}`);
+
+      // Array to hold all metrics data
+      const allMetricsData = [];
+
+      // Read and parse each JSON file
+      for (const file of files) {
+        const filePath = path.join(resultsDir, file);
+
+        try {
+          console.log(`Reading file: ${file}`);
+          const fileContent = fs.readFileSync(filePath, "utf8");
+
+          if (fileContent.trim().length === 0) {
+            console.log(`Empty file: ${file}`);
+            continue;
+          }
+
+          const metricsData = JSON.parse(fileContent);
+          console.log(`Successfully parsed ${file}`);
+
+          // Validate the structure we need
+          if (
+            metricsData.fullPath &&
+            metricsData.folderName &&
+            Array.isArray(metricsData.metrics)
+          ) {
+            allMetricsData.push(metricsData);
+          } else {
+            console.log(`Invalid metrics structure in file: ${file}`);
+          }
+        } catch (parseError) {
+          console.error(`Error reading or parsing file ${file}:`, parseError);
+        }
+      }
+
+      if (allMetricsData.length === 0) {
+        console.log("No valid metrics data found in any files.");
+        return [];
+      }
+
+      console.log(
+        `Successfully loaded ${allMetricsData.length} metrics records`
+      );
+      return allMetricsData;
     } catch (err) {
-      console.error("Error reading metrics file:", err);
+      console.error("Error fetching metrics data:", err);
       return [];
     }
   }
 
   private _setupMessageListener() {
-    this._panel.webview.onDidReceiveMessage(
-      (message) => {
-        if (message.type === "fileSelected") {
-          const metricsData = this._getMetricsData();
-          const fileMetrics = metricsData.find((file: { folderName: string }) => file.folderName === message.fileName);
+    this._panel.webview.onDidReceiveMessage((message) => {
+      if (message.type === "fileSelected") {
+        const metricsData = this._getMetricsData();
+        const fileMetrics = metricsData.find(
+          (file) => file.folderName === message.fileName
+        );
 
-          this._panel.webview.postMessage({ type: "updateCharts", fileMetrics: fileMetrics ? [fileMetrics] : [] });
-        }
-      },
-      undefined
-    );
+        this._panel.webview.postMessage({
+          type: "updateCharts",
+          fileMetrics: fileMetrics ? [fileMetrics] : [],
+        });
+      }
+    }, undefined);
   }
 
   private _getHtmlForWebview(fileList: string[]): string {
@@ -157,7 +221,12 @@ export class DashboardPanel {
         <div id="sidebar">
           <h3>Files</h3>
           <ul id="file-list">
-            ${fileList.map(file => `<li class="file-item" onclick="selectFile('${file}')">${file}</li>`).join('')}
+            ${fileList
+              .map(
+                (file) =>
+                  `<li class="file-item" onclick="selectFile('${file}')">${file}</li>`
+              )
+              .join("")}
           </ul>
         </div>
         <div class="chart-container" id="chart-container"></div>
@@ -206,8 +275,4 @@ export class DashboardPanel {
       </html>
     `;
   }
-  
-  
-  
-  
 }
