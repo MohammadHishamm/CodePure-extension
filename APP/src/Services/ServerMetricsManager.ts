@@ -96,6 +96,10 @@ export class ServerMetricsManager {
 
       const metricsData = JSON.parse(fileContent);
 
+      // Add filename to metrics data for identification
+      const fileName = path.basename(metricsData.fullPath);
+      metricsData.fileName = fileName;
+
       // Wrap the metrics data in an array to match server expectations
       const serverReadyData = [metricsData];
 

@@ -47,8 +47,10 @@ class CustomTreeProvider {
     treeItems = [];
     isAuthenticated = false;
     GithubApi;
+    predictionCache = new Map(); // Store predictions by filename
     constructor() {
         this.GithubApi = new GithubAPI_1.GitHubAPI();
+        this.loadPredictionCache();
         vscode.commands.registerCommand("extension.connectGitHub", this.authenticateWithGitHub, this);
         vscode.commands.registerCommand("extension.clearHistory", this.clearHistory, this);
         vscode.commands.registerCommand("extension.syncDatabase", this.syncWithDatabase, this);
@@ -165,18 +167,29 @@ class CustomTreeProvider {
                 ];
             }
             console.log(`Successfully loaded ${allMetricsData.length} metrics records`);
-            // Send metrics to server for predictions (if you need this functionality)
+            // Send metrics to server for predictions - only the most recent file
             const serverManager = new ServerMetricsManager_1.ServerMetricsManager();
             const response = await serverManager.sendMetricsFile();
+            // Update prediction cache with new predictions if available
+            if (response?.predictions && Array.isArray(response.predictions)) {
+                response.predictions.forEach((prediction) => {
+                    if (prediction.fileName) {
+                        this.predictionCache.set(prediction.fileName, prediction);
+                        console.log(`Updated prediction cache for: ${prediction.fileName}`);
+                    }
+                });
+            }
             // Create tree items for each metrics file
-            const metricItems = allMetricsData.map((item, index) => {
+            const metricItems = allMetricsData.map((item) => {
                 const fileUri = vscode.Uri.file(item.fullPath);
                 const fileName = path.basename(item.fullPath);
                 const fileMetrics = item.metrics.map((metric) => new TreeItem_1.TreeItem(`🔎 ${metric.name}: ${metric.value}`, [], vscode.TreeItemCollapsibleState.None));
-                // Get predictions for this file if available
-                const filePrediction = response?.predictions?.[index] || {};
+                // Get prediction from cache if available
+                const filePrediction = this.predictionCache.get(fileName) || {};
+                // Create a copy of the prediction without the fileName property
+                const { fileName: _, ...predictionWithoutFileName } = filePrediction;
                 // Filter and display detected code smells
-                const detectedSmells = Object.entries(filePrediction)
+                const detectedSmells = Object.entries(predictionWithoutFileName)
                     .filter(([_, value]) => value === 1) // Only include detected smells (value = 1)
                     .map(([smell, _]) => new TreeItem_1.TreeItem(`⚠️ ${smell}: ‼️ Detected ‼️`, [], vscode.TreeItemCollapsibleState.None));
                 // If no code smells were detected, add a "No Code Smells" message
@@ -215,6 +228,7 @@ class CustomTreeProvider {
         console.log(`Observer notified: Metrics updated with ${metricsData.length} items.`);
         this.fetchMetricsData().then((items) => {
             this.treeItems = items;
+            this.savePredictionCache();
             this.refresh();
         });
     }
@@ -377,6 +391,8 @@ class CustomTreeProvider {
                 for (const file of files) {
                     fs.unlinkSync(path.join(resultsDir, file));
                 }
+                // Clear the prediction cache as well
+                this.predictionCache.clear();
                 console.log("Metrics history cleared.");
                 vscode.window.showInformationMessage("All metrics history has been cleared.");
             }
@@ -389,6 +405,40 @@ class CustomTreeProvider {
         catch (err) {
             console.error("Error clearing metrics history files:", err);
             vscode.window.showErrorMessage("Error clearing metrics history.");
+        }
+    }
+    savePredictionCache() {
+        try {
+            const cacheDir = path.join(__dirname, "..", "src", "Cache");
+            const cachePath = cacheDir.replace(/out[\\\/]?/, "");
+            // Create cache directory if it doesn't exist
+            if (!fs.existsSync(cachePath)) {
+                fs.mkdirSync(cachePath, { recursive: true });
+            }
+            const cachefile = path.join(cachePath, "prediction-cache.json");
+            const cacheData = Object.fromEntries(this.predictionCache);
+            fs.writeFileSync(cachefile, JSON.stringify(cacheData, null, 2));
+            console.log("Prediction cache saved successfully");
+        }
+        catch (error) {
+            console.error("Error saving prediction cache:", error);
+        }
+    }
+    loadPredictionCache() {
+        try {
+            const cacheDir = path.join(__dirname, "..", "src", "Cache");
+            const cachePath = cacheDir.replace(/out[\\\/]?/, "");
+            const cachefile = path.join(cachePath, "prediction-cache.json");
+            if (fs.existsSync(cachefile)) {
+                const cacheData = JSON.parse(fs.readFileSync(cachefile, "utf8"));
+                this.predictionCache = new Map(Object.entries(cacheData));
+                console.log("Prediction cache loaded successfully");
+            }
+        }
+        catch (error) {
+            console.error("Error loading prediction cache:", error);
+            // Initialize empty cache if loading fails
+            this.predictionCache = new Map();
         }
     }
 }

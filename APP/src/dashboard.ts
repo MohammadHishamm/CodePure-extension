@@ -21,10 +21,11 @@ export class CustomTreeProvider
   private treeItems: TreeItem[] = [];
   private isAuthenticated: boolean = false;
   private GithubApi;
+  private predictionCache: Map<string, any> = new Map(); // Store predictions by filename
 
   constructor() {
     this.GithubApi = new GitHubAPI();
-
+    this.loadPredictionCache();
     vscode.commands.registerCommand(
       "extension.connectGitHub",
       this.authenticateWithGitHub,
@@ -209,12 +210,22 @@ export class CustomTreeProvider
         `Successfully loaded ${allMetricsData.length} metrics records`
       );
 
-      // Send metrics to server for predictions (if you need this functionality)
+      // Send metrics to server for predictions - only the most recent file
       const serverManager = new ServerMetricsManager();
       const response = await serverManager.sendMetricsFile();
 
+      // Update prediction cache with new predictions if available
+      if (response?.predictions && Array.isArray(response.predictions)) {
+        response.predictions.forEach((prediction: any) => {
+          if (prediction.fileName) {
+            this.predictionCache.set(prediction.fileName, prediction);
+            console.log(`Updated prediction cache for: ${prediction.fileName}`);
+          }
+        });
+      }
+
       // Create tree items for each metrics file
-      const metricItems = allMetricsData.map((item, index) => {
+      const metricItems = allMetricsData.map((item) => {
         const fileUri = vscode.Uri.file(item.fullPath);
         const fileName = path.basename(item.fullPath);
 
@@ -227,11 +238,16 @@ export class CustomTreeProvider
             )
         );
 
-        // Get predictions for this file if available
-        const filePrediction = response?.predictions?.[index] || {};
+        // Get prediction from cache if available
+        const filePrediction = this.predictionCache.get(fileName) || {};
+
+        // Create a copy of the prediction without the fileName property
+        const { fileName: _, ...predictionWithoutFileName } = filePrediction;
 
         // Filter and display detected code smells
-        const detectedSmells: TreeItem[] = Object.entries(filePrediction)
+        const detectedSmells: TreeItem[] = Object.entries(
+          predictionWithoutFileName
+        )
           .filter(([_, value]) => value === 1) // Only include detected smells (value = 1)
           .map(
             ([smell, _]) =>
@@ -307,6 +323,7 @@ export class CustomTreeProvider
     );
     this.fetchMetricsData().then((items) => {
       this.treeItems = items;
+      this.savePredictionCache();
       this.refresh();
     });
   }
@@ -557,6 +574,9 @@ export class CustomTreeProvider
           fs.unlinkSync(path.join(resultsDir, file));
         }
 
+        // Clear the prediction cache as well
+        this.predictionCache.clear();
+
         console.log("Metrics history cleared.");
         vscode.window.showInformationMessage(
           "All metrics history has been cleared."
@@ -570,6 +590,42 @@ export class CustomTreeProvider
     } catch (err) {
       console.error("Error clearing metrics history files:", err);
       vscode.window.showErrorMessage("Error clearing metrics history.");
+    }
+  }
+
+  private savePredictionCache(): void {
+    try {
+      const cacheDir = path.join(__dirname, "..", "src", "Cache");
+      const cachePath = cacheDir.replace(/out[\\\/]?/, "");
+
+      // Create cache directory if it doesn't exist
+      if (!fs.existsSync(cachePath)) {
+        fs.mkdirSync(cachePath, { recursive: true });
+      }
+
+      const cachefile = path.join(cachePath, "prediction-cache.json");
+      const cacheData = Object.fromEntries(this.predictionCache);
+      fs.writeFileSync(cachefile, JSON.stringify(cacheData, null, 2));
+      console.log("Prediction cache saved successfully");
+    } catch (error) {
+      console.error("Error saving prediction cache:", error);
+    }
+  }
+  private loadPredictionCache(): void {
+    try {
+      const cacheDir = path.join(__dirname, "..", "src", "Cache");
+      const cachePath = cacheDir.replace(/out[\\\/]?/, "");
+      const cachefile = path.join(cachePath, "prediction-cache.json");
+
+      if (fs.existsSync(cachefile)) {
+        const cacheData = JSON.parse(fs.readFileSync(cachefile, "utf8"));
+        this.predictionCache = new Map(Object.entries(cacheData));
+        console.log("Prediction cache loaded successfully");
+      }
+    } catch (error) {
+      console.error("Error loading prediction cache:", error);
+      // Initialize empty cache if loading fails
+      this.predictionCache = new Map();
     }
   }
 }

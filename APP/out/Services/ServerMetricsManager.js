@@ -89,6 +89,9 @@ class ServerMetricsManager {
                 return null;
             }
             const metricsData = JSON.parse(fileContent);
+            // Add filename to metrics data for identification
+            const fileName = path_1.default.basename(metricsData.fullPath);
+            metricsData.fileName = fileName;
             // Wrap the metrics data in an array to match server expectations
             const serverReadyData = [metricsData];
             console.log("Sending data to server:", JSON.stringify(serverReadyData, null, 2));
