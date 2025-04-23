@@ -127,141 +127,217 @@ export class CustomTreeProvider
     console.log(`Fetching metrics from directory: ${resultsDir}`);
 
     if (!fs.existsSync(resultsDir)) {
-        console.error("Results directory does not exist.");
-        return [new TreeItem("No metrics data available", [], vscode.TreeItemCollapsibleState.None)];
+      console.error("Results directory does not exist.");
+      return [new TreeItem("No metrics data available", [], vscode.TreeItemCollapsibleState.None)];
     }
 
     try {
-        const allFiles = fs.readdirSync(resultsDir);
-        const files = allFiles.filter((file) => file.endsWith(".json"));
+      const allFiles = fs.readdirSync(resultsDir);
+      const files = allFiles.filter((file) => file.endsWith(".json"));
 
-        if (files.length === 0) {
-            return [new TreeItem("No metrics data available", [], vscode.TreeItemCollapsibleState.None)];
+      if (files.length === 0) {
+        return [new TreeItem("No metrics data available", [], vscode.TreeItemCollapsibleState.None)];
+      }
+
+      const allMetricsData: any[] = [];
+
+      for (const file of files) {
+        const filePath = path.join(resultsDir, file);
+
+        try {
+          const fileContent = fs.readFileSync(filePath, "utf8");
+          if (fileContent.trim().length === 0) continue;
+
+          const metricsData = JSON.parse(fileContent);
+
+          if (
+            metricsData.fullPath &&
+            metricsData.folderName &&
+            Array.isArray(metricsData.metrics)
+          ) {
+            allMetricsData.push(metricsData);
+
+
+          }
+        } catch (parseError) {
+          console.error(`Error reading or parsing file ${file}:`, parseError);
         }
+      }
 
-        const allMetricsData: any[] = [];
+      if (allMetricsData.length === 0) {
+        return [new TreeItem("No valid metrics data available", [], vscode.TreeItemCollapsibleState.None)];
+      }
 
-        for (const file of files) {
-            const filePath = path.join(resultsDir, file);
+      const serverManager = new ServerMetricsManager();
+      const response = await serverManager.sendMetricsFile();
 
-            try {
-                const fileContent = fs.readFileSync(filePath, "utf8");
-                if (fileContent.trim().length === 0) continue;
+      if (response?.predictions && Array.isArray(response.predictions)) {
 
-                const metricsData = JSON.parse(fileContent);
+        // Initialize repo details
+        let owner: string | undefined;
+        let repo: string | undefined;
+        let repoId: any = undefined;
+        let predictionfilename: any = undefined;
+        let Predictions: any = undefined;
 
-                if (
-                    metricsData.fullPath &&
-                    metricsData.folderName &&
-                    Array.isArray(metricsData.metrics)
-                ) {
-                    allMetricsData.push(metricsData);
-
-             
-                }
-            } catch (parseError) {
-                console.error(`Error reading or parsing file ${file}:`, parseError);
-            }
-        }
-
-        if (allMetricsData.length === 0) {
-            return [new TreeItem("No valid metrics data available", [], vscode.TreeItemCollapsibleState.None)];
-        }
-
-        const serverManager = new ServerMetricsManager();
-        const response = await serverManager.sendMetricsFile();
-
-        if (response?.predictions && Array.isArray(response.predictions)) {
-            response.predictions.forEach((prediction: any) => {
-                if (prediction.fileName) {
-                    this.predictionCache.set(prediction.fileName, prediction);
-                }
-            });
-        }
-
-        const metricItems = allMetricsData.map((item) => {
-            const fileUri = vscode.Uri.file(item.fullPath);
-            const fileName = path.basename(item.fullPath);
-
-            const fileMetrics = item.metrics.map(
-                (metric: { name: string; value: number }) =>
-                    new TreeItem(
-                        `🔎 ${metric.name}: ${metric.value}`,
-                        [],
-                        vscode.TreeItemCollapsibleState.None
-                    )
-            );
-
-            const filePrediction = this.predictionCache.get(fileName) || {};
-            const { fileName: _, ...predictionWithoutFileName } = filePrediction;
-
-            const detectedSmells: TreeItem[] = Object.entries(predictionWithoutFileName)
-                .filter(([_, value]) => value === 1)
-                .map(
-                    ([smell, _]) =>
-                        new TreeItem(
-                            `⚠️ ${smell}: ‼️ Detected ‼️`,
-                            [],
-                            vscode.TreeItemCollapsibleState.None
-                        )
-                );
-
-            if (detectedSmells.length === 0) {
-                detectedSmells.push(
-                    new TreeItem(
-                        "✅ No code smells ✅",
-                        [],
-                        vscode.TreeItemCollapsibleState.None
-                    )
-                );
-            }
-
-            const fileItem = new TreeItem(
-                fileName,
-                [...fileMetrics, ...detectedSmells],
-                vscode.TreeItemCollapsibleState.Collapsed
-            );
-
-            fileItem.resourceUri = fileUri;
-            fileItem.tooltip = new vscode.MarkdownString(
-                `[🔗 Click to open ${fileName}](command:vscode.open?${encodeURIComponent(
-                    JSON.stringify([fileUri.toString()])
-                )})`
-            );
-            fileItem.tooltip.isTrusted = true;
-
-            fileItem.command = {
-                command: "vscode.open",
-                title: `Open ${fileName}`,
-                arguments: [fileUri],
-            };
-
-            return fileItem;
+        response.predictions.forEach((prediction: any) => {
+          if (prediction.fileName) {
+            this.predictionCache.set(prediction.fileName, prediction);
+            predictionfilename = prediction.fileName;
+            Predictions = prediction;
+          }
         });
 
-        const clearHistoryItem = new TreeItem(
-            "🗑️ Clear All History",
-            [],
-            vscode.TreeItemCollapsibleState.None
-        );
-        clearHistoryItem.command = {
-            command: "extension.clearHistory",
-            title: "Clear All History",
-            tooltip: "Click to clear the metrics history",
-        };
 
-        return [...metricItems, clearHistoryItem];
-    } catch (err) {
-        console.error("Error fetching metrics data:", err);
-        return [
+
+
+        // Try to find the already synced repo from GitHub API
+        const treeItems = await this.GithubApi.fetchRepositoriesTreeItems();
+        for (const item of treeItems) {
+          if (item.label === "Already Synced" && item.command?.arguments) {
+            [owner, repo] = item.command.arguments;
+            console.log("Already Synced Repo Found:", { owner, repo });
+            break;
+          }
+        }
+
+        // If a synced repo was found, try to find its ID from the MongoDB
+        if (owner && repo) {
+          try {
+            const mongo = MongoService.getInstance();
+            await mongo.connect();
+            const db = mongo.getDb();
+
+            const repoCollection = db.collection("Repos");
+            const repoDoc = await repoCollection.findOne({
+              owner,
+              "repositories.name": repo
+            });
+
+            if (repoDoc) {
+              const matchingRepo = repoDoc.repositories.find((r: any) => r.name === repo);
+              repoId = matchingRepo?._id || repoDoc._id;
+              console.log("Repository ID found in DB:", repoId);
+            } else {
+              console.log("Repository not found in DB.");
+            }
+          } catch (dbError) {
+            console.error("Error querying repository from MongoDB:", dbError);
+          }
+        } else {
+          console.warn("Owner or repo not found; skipping DB lookup.");
+        }
+
+
+        // Save predictions to MongoDB
+        try {
+          const mongo = MongoService.getInstance();
+          await mongo.connect();
+          const db = mongo.getDb();
+
+          const predictionCollection = db.collection("Predictions");
+
+          for (const [filePath, predictionData] of this.predictionCache.entries()) {
+            const doc = {
+              filePath,
+              predictionfilename: predictionfilename,
+              Predictions: Predictions,
+              repoId: repoId || null,
+              savedAt: new Date()
+            };
+
+            await predictionCollection.insertOne(doc);
+            console.log(`Saved prediction for ${filePath}`);
+          }
+        } catch (dbInsertErr) {
+          console.error("Failed to insert predictions:", dbInsertErr);
+        }
+      }
+
+
+      const metricItems = allMetricsData.map((item) => {
+        const fileUri = vscode.Uri.file(item.fullPath);
+        const fileName = path.basename(item.fullPath);
+
+        const fileMetrics = item.metrics.map(
+          (metric: { name: string; value: number }) =>
             new TreeItem(
-                `Error fetching metrics: ${err}`,
+              `🔎 ${metric.name}: ${metric.value}`,
+              [],
+              vscode.TreeItemCollapsibleState.None
+            )
+        );
+
+        const filePrediction = this.predictionCache.get(fileName) || {};
+        const { fileName: _, ...predictionWithoutFileName } = filePrediction;
+
+        const detectedSmells: TreeItem[] = Object.entries(predictionWithoutFileName)
+          .filter(([_, value]) => value === 1)
+          .map(
+            ([smell, _]) =>
+              new TreeItem(
+                `⚠️ ${smell}: ‼️ Detected ‼️`,
                 [],
                 vscode.TreeItemCollapsibleState.None
-            ),
-        ];
+              )
+          );
+
+        if (detectedSmells.length === 0) {
+          detectedSmells.push(
+            new TreeItem(
+              "✅ No code smells ✅",
+              [],
+              vscode.TreeItemCollapsibleState.None
+            )
+          );
+        }
+
+        const fileItem = new TreeItem(
+          fileName,
+          [...fileMetrics, ...detectedSmells],
+          vscode.TreeItemCollapsibleState.Collapsed
+        );
+
+        fileItem.resourceUri = fileUri;
+        fileItem.tooltip = new vscode.MarkdownString(
+          `[🔗 Click to open ${fileName}](command:vscode.open?${encodeURIComponent(
+            JSON.stringify([fileUri.toString()])
+          )})`
+        );
+        fileItem.tooltip.isTrusted = true;
+
+        fileItem.command = {
+          command: "vscode.open",
+          title: `Open ${fileName}`,
+          arguments: [fileUri],
+        };
+
+        return fileItem;
+      });
+
+      const clearHistoryItem = new TreeItem(
+        "🗑️ Clear All History",
+        [],
+        vscode.TreeItemCollapsibleState.None
+      );
+      clearHistoryItem.command = {
+        command: "extension.clearHistory",
+        title: "Clear All History",
+        tooltip: "Click to clear the metrics history",
+      };
+
+      return [...metricItems, clearHistoryItem];
+    } catch (err) {
+      console.error("Error fetching metrics data:", err);
+      return [
+        new TreeItem(
+          `Error fetching metrics: ${err}`,
+          [],
+          vscode.TreeItemCollapsibleState.None
+        ),
+      ];
     }
-}
+  }
 
 
   update(metricsData: MetricsFileFormat[]): void {
@@ -563,91 +639,22 @@ export class CustomTreeProvider
     }
   }
 
-  private async loadPredictionCache(): Promise<void> {
+  private loadPredictionCache(): void {
     try {
-      // Resolve cache file path
-      const cacheDir = path.join(__dirname, "..", "src", "Cache").replace(/out[\\\/]?/, "");
-      const cacheFile = path.join(cacheDir, "prediction-cache.json");
-  
-      // Initialize repo details
-      let owner: string | undefined;
-      let repo: string | undefined;
-      let repoId: any = undefined;
-  
-      // Try to find the already synced repo from GitHub API
-      const treeItems = await this.GithubApi.fetchRepositoriesTreeItems();
-      for (const item of treeItems) {
-        if (item.label === "Already Synced" && item.command?.arguments) {
-          [owner, repo] = item.command.arguments;
-          console.log("Already Synced Repo Found:", { owner, repo });
-          break;
-        }
-      }
-  
-      // If a synced repo was found, try to find its ID from the MongoDB
-      if (owner && repo) {
-        try {
-          const mongo = MongoService.getInstance();
-          await mongo.connect();
-          const db = mongo.getDb();
-  
-          const repoCollection = db.collection("Repos");
-          const repoDoc = await repoCollection.findOne({
-            owner,
-            "repositories.name": repo
-          });
-  
-          if (repoDoc) {
-            const matchingRepo = repoDoc.repositories.find((r: any) => r.name === repo);
-            repoId = matchingRepo?._id || repoDoc._id;
-            console.log("Repository ID found in DB:", repoId);
-          } else {
-            console.log("Repository not found in DB.");
-          }
-        } catch (dbError) {
-          console.error("Error querying repository from MongoDB:", dbError);
-        }
-      } else {
-        console.warn("Owner or repo not found; skipping DB lookup.");
-      }
-  
-      // Load prediction cache and store predictions in DB
-      if (fs.existsSync(cacheFile)) {
-        const cacheData = JSON.parse(fs.readFileSync(cacheFile, "utf8"));
+      const cacheDir = path.join(__dirname, "..", "src", "Cache");
+      const cachePath = cacheDir.replace(/out[\\\/]?/, "");
+      const cachefile = path.join(cachePath, "prediction-cache.json");
+
+      if (fs.existsSync(cachefile)) {
+        const cacheData = JSON.parse(fs.readFileSync(cachefile, "utf8"));
         this.predictionCache = new Map(Object.entries(cacheData));
-        console.log("Prediction cache loaded successfully.");
-  
-        // Save predictions to MongoDB
-        try {
-          const mongo = MongoService.getInstance();
-          await mongo.connect();
-          const db = mongo.getDb();
-  
-          const predictionCollection = db.collection("Predictions");
-  
-          for (const [filePath, predictionData] of this.predictionCache.entries()) {
-            const doc = {
-              filePath,
-              prediction: predictionData.prediction,
-              confidence: predictionData.confidence,
-              repoId: repoId || null,
-              savedAt: new Date()
-            };
-  
-            await predictionCollection.insertOne(doc);
-            console.log(`Saved prediction for ${filePath}`);
-          }
-        } catch (dbInsertErr) {
-          console.error("Failed to insert predictions:", dbInsertErr);
-        }
-      } else {
-        console.warn("Prediction cache file does not exist.");
-        this.predictionCache = new Map();
+        console.log("Prediction cache loaded successfully");
       }
     } catch (error) {
       console.error("Error loading prediction cache:", error);
-      this.predictionCache = new Map(); // Initialize empty cache on failure
+      // Initialize empty cache if loading fails
+      this.predictionCache = new Map();
     }
   }
-  
+
 }
