@@ -121,48 +121,7 @@ export class CustomTreeProvider
   }
 
   private async fetchMetricsData(): Promise<TreeItem[]> {
-    const treeItems = await this.GithubApi.fetchRepositoriesTreeItems();
 
-    let owner: string | undefined;
-    let repo: string | undefined;
-    let repoId: any = undefined;
-
-    for (const item of treeItems) {
-        if (item.label === "Already Synced" && item.command?.arguments) {
-            [owner, repo] = item.command.arguments;
-            console.log("Already Synced Repo:");
-            console.log("Owner:", owner);
-            console.log("Repo:", repo);
-            break;
-        }
-    }
-
-    if (owner && repo) {
-        try {
-            const mongo = MongoService.getInstance();
-            await mongo.connect();
-            const db = mongo.getDb();
-
-            const repoCollection = db.collection("Repos");
-
-            const repoDoc = await repoCollection.findOne({
-                owner,
-                "repositories.name": repo
-            });
-
-            if (repoDoc) {
-                const matchingRepo = repoDoc.repositories.find((r: any) => r.name === repo);
-                repoId = matchingRepo?._id || repoDoc._id;
-                console.log("Found repository ID in database:", repoId);
-            } else {
-                console.log("Repository not found in database.");
-            }
-        } catch (err) {
-            console.error("Error querying MongoDB for repository:", err);
-        }
-    } else {
-        console.warn("Owner or repo not found, skipping DB lookup.");
-    }
 
     let resultsDir = path.join(__dirname, "..", "src", "Results").replace(/out[\\\/]?/, "");
     console.log(`Fetching metrics from directory: ${resultsDir}`);
@@ -198,27 +157,7 @@ export class CustomTreeProvider
                 ) {
                     allMetricsData.push(metricsData);
 
-                    try {
-                        const mongo = MongoService.getInstance();
-                        await mongo.connect();
-                        const db = mongo.getDb();
-
-                        const metricsCollection = db.collection("Metrics");
-
-                        const documentToInsert = {
-                            fileName: path.basename(metricsData.fullPath),
-                            folderName: metricsData.folderName,
-                            fullPath: metricsData.fullPath,
-                            metrics: metricsData.metrics,
-                            repoId: repoId || null,
-                            savedAt: new Date()
-                        };
-
-                        await metricsCollection.insertOne(documentToInsert);
-                        console.log(`Saved metrics for ${documentToInsert.fileName} to database.`);
-                    } catch (dbInsertErr) {
-                        console.error(`Failed to insert metrics for ${metricsData.fullPath}:`, dbInsertErr);
-                    }
+             
                 }
             } catch (parseError) {
                 console.error(`Error reading or parsing file ${file}:`, parseError);
@@ -624,21 +563,91 @@ export class CustomTreeProvider
     }
   }
 
-  private loadPredictionCache(): void {
+  private async loadPredictionCache(): Promise<void> {
     try {
-      const cacheDir = path.join(__dirname, "..", "src", "Cache");
-      const cachePath = cacheDir.replace(/out[\\\/]?/, "");
-      const cachefile = path.join(cachePath, "prediction-cache.json");
-
-      if (fs.existsSync(cachefile)) {
-        const cacheData = JSON.parse(fs.readFileSync(cachefile, "utf8"));
+      // Resolve cache file path
+      const cacheDir = path.join(__dirname, "..", "src", "Cache").replace(/out[\\\/]?/, "");
+      const cacheFile = path.join(cacheDir, "prediction-cache.json");
+  
+      // Initialize repo details
+      let owner: string | undefined;
+      let repo: string | undefined;
+      let repoId: any = undefined;
+  
+      // Try to find the already synced repo from GitHub API
+      const treeItems = await this.GithubApi.fetchRepositoriesTreeItems();
+      for (const item of treeItems) {
+        if (item.label === "Already Synced" && item.command?.arguments) {
+          [owner, repo] = item.command.arguments;
+          console.log("Already Synced Repo Found:", { owner, repo });
+          break;
+        }
+      }
+  
+      // If a synced repo was found, try to find its ID from the MongoDB
+      if (owner && repo) {
+        try {
+          const mongo = MongoService.getInstance();
+          await mongo.connect();
+          const db = mongo.getDb();
+  
+          const repoCollection = db.collection("Repos");
+          const repoDoc = await repoCollection.findOne({
+            owner,
+            "repositories.name": repo
+          });
+  
+          if (repoDoc) {
+            const matchingRepo = repoDoc.repositories.find((r: any) => r.name === repo);
+            repoId = matchingRepo?._id || repoDoc._id;
+            console.log("Repository ID found in DB:", repoId);
+          } else {
+            console.log("Repository not found in DB.");
+          }
+        } catch (dbError) {
+          console.error("Error querying repository from MongoDB:", dbError);
+        }
+      } else {
+        console.warn("Owner or repo not found; skipping DB lookup.");
+      }
+  
+      // Load prediction cache and store predictions in DB
+      if (fs.existsSync(cacheFile)) {
+        const cacheData = JSON.parse(fs.readFileSync(cacheFile, "utf8"));
         this.predictionCache = new Map(Object.entries(cacheData));
-        console.log("Prediction cache loaded successfully");
+        console.log("Prediction cache loaded successfully.");
+  
+        // Save predictions to MongoDB
+        try {
+          const mongo = MongoService.getInstance();
+          await mongo.connect();
+          const db = mongo.getDb();
+  
+          const predictionCollection = db.collection("Predictions");
+  
+          for (const [filePath, predictionData] of this.predictionCache.entries()) {
+            const doc = {
+              filePath,
+              prediction: predictionData.prediction,
+              confidence: predictionData.confidence,
+              repoId: repoId || null,
+              savedAt: new Date()
+            };
+  
+            await predictionCollection.insertOne(doc);
+            console.log(`Saved prediction for ${filePath}`);
+          }
+        } catch (dbInsertErr) {
+          console.error("Failed to insert predictions:", dbInsertErr);
+        }
+      } else {
+        console.warn("Prediction cache file does not exist.");
+        this.predictionCache = new Map();
       }
     } catch (error) {
       console.error("Error loading prediction cache:", error);
-      // Initialize empty cache if loading fails
-      this.predictionCache = new Map();
+      this.predictionCache = new Map(); // Initialize empty cache on failure
     }
   }
+  
 }
