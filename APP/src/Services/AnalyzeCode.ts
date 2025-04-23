@@ -266,6 +266,27 @@ async function suggestBrainClassFix(document: vscode.TextDocument) {
     });
 }
 
+async function suggestSchizoClassFix(document: vscode.TextDocument) {
+  const fullRange = new vscode.Range(
+    new vscode.Position(0, 0),
+    new vscode.Position(
+      document.lineCount - 1,
+      document.lineAt(document.lineCount - 1).text.length
+    )
+  );
+
+  vscode.window
+    .showInformationMessage(
+      "CodePure detected a Schizophrenic class! Want to apply a Quick AI Fix?",
+      "✨ Quick AI Fix"
+    )
+    .then((selection) => {
+      if (selection === "✨ Quick AI Fix") {
+        vscode.commands.executeCommand("codepure.getSchizoClassFix", document);
+      }
+    });
+}
+
 async function suggestGodClassFix(document: vscode.TextDocument) {
   const fullRange = new vscode.Range(
     new vscode.Position(0, 0),
@@ -313,30 +334,175 @@ vscode.commands.registerCommand(
   async (document: vscode.TextDocument) => {
     await applyAIFix(
       document,
-      "Brain Class detected, Suggest a fix using code only. Do not include explanations, comments, or markdown. Respond with valid Java code only."
+      `You are assisting in refactoring Java code to eliminate the 'Brain Class' code smell.
+
+        A Brain Class contains too much intelligence in one place. It is often too complex, with large, highly weighted methods and high internal logic. This class was detected based on the following key metrics:
+        - AMW (Average Method Weight): Indicates overly complex methods.
+        - NOM (Number of Methods): Too many methods lead to too much responsibility.
+        - FDP (Access to Foreign Data): Indicates frequent access to foreign data.
+
+        Apply the following strategies:
+        - Split large methods into smaller ones with single responsibilities.
+        - Extract utility or helper classes where appropriate.
+        - Reduce method complexity by removing deeply nested logic or breaking down conditionals.
+
+        🔧 Refactor the class to reduce these values.
+        Respond with Java code only, no comments, explanations, or markdown.`
     );
   }
 );
+
+vscode.commands.registerCommand(
+  "codepure.getSchizoClassFix",
+  async (document: vscode.TextDocument) => {
+    await applyAIFix(
+      document,
+      ` `
+    );
+  }
+);
+
 
 vscode.commands.registerCommand(
   "codepure.getGodClassFix",
   async (document: vscode.TextDocument) => {
     await applyAIFix(
       document,
-      "God Class detected, Suggest a fix using code only. Do not include explanations, comments, or markdown. Respond with valid Java code only."
+      `You are helping improve Java code by fixing the 'God Class' code smell.
+
+        A God Class centralizes too much intelligence and has low modularity. This smell was detected due to:
+        - FDP (Access to Foreign Data): Accessing too much data from other classes.
+        - NOM (Number of Methods): Too many methods implies excessive responsibility.
+        - AMW (Average Method Weight): Methods are too complex.
+
+        Refactoring strategies:
+        - Extract classes for independent responsibilities.
+        - Move methods that mostly operate on foreign data.
+        - Reduce method complexity via decomposition or helper methods.
+
+        🔧 Refactor the class to reduce size and increase cohesion.
+        Respond with Java code only, no comments or explanations.`
     );
   }
 );
+
 
 vscode.commands.registerCommand(
   "codepure.getDataClassFix",
   async (document: vscode.TextDocument) => {
     await applyAIFix(
       document,
-      "Data Class detected, Suggest a fix using code only. Do not include explanations, comments, or markdown. Respond with valid Java code only."
+      `You are improving Java code by fixing the 'Data Class' code smell.
+
+A Data Class contains mostly fields and accessors (getters/setters) with little or no real behavior. It is a passive object, and this is considered poor object-oriented design.
+
+It was detected using these metrics:
+- WOC: Low (few meaningful methods)
+- NOAM: High (lots of accessors)
+- NOM: Low (very few functional methods)
+
+Your goal is to transform this into a class with real behavior. You must:
+- Introduce methods that operate on the class's internal data.
+- Remove or reduce public accessors if behavior is added internally.
+- Encapsulate logic that would otherwise live in other classes.
+
+❌ Example of a bad Data Class:
+public class JmxCredentials {
+
+	public static final String WRITE_FLAG = "readwrite";
+
+	private String username;
+
+	private String password;
+
+	private boolean writeAccess;
+
+    public JmxCredentials(String username, String password, boolean writeAccess) {
+		this.username = username;
+		this.password = password;
+		this.writeAccess = writeAccess;
+	}
+
+    public String getCredentialsString() {
+        return username + ":" + password + (writeAccess ? ":" + WRITE_FLAG : "");
+    }
+
+    public boolean isValid() {
+        return username != null && !username.isEmpty() && password != null && !password.isEmpty();
+    }
+
+    public void setUsername(String username) {
+        this.username = username;
+    }
+
+    public void setPassword(String password) {
+        this.password = password;
+    }
+
+    public void setWriteAccess(boolean writeAccess) {
+        this.writeAccess = writeAccess;
+    }
+
+    private String getSanitizedUsername(){
+        return username == null ? "" : username;
+    }
+
+    private String getSanitizedPassword(){
+        return password == null ? "" : password;
+    }
+
+    public String getSanitizedCredentialsString(){
+        return getSanitizedUsername() + ":" + getSanitizedPassword() + (writeAccess ? ":" + WRITE_FLAG : "");
+    }
+
+}
+
+✅ Example of a good version with behavior:
+public class JmxCredentials {
+
+	public static final String WRITE_FLAG = "readwrite";
+
+	private String username;
+
+	private String password;
+
+	private boolean writeAccess;
+
+    public JmxCredentials(String username, String password, boolean writeAccess) {
+		this.username = username;
+		this.password = password;
+		this.writeAccess = writeAccess;
+	}
+
+    public String getCredentialsString() {
+        return username + ":" + password + (writeAccess ? ":" + WRITE_FLAG : "");
+    }
+
+    public boolean isValid() {
+        return username != null && !username.isEmpty() && password != null && !password.isEmpty();
+    }
+
+
+    public String getSanitizedCredentialsString(){
+        return (username == null ? "" : username) + ":" + (password == null ? "" : password) + (writeAccess ? ":" + WRITE_FLAG : "");
+    }
+
+    public boolean hasWriteAccess(){
+        return writeAccess;
+    }
+
+    public void setWriteAccess(boolean writeAccess){
+        this.writeAccess = writeAccess;
+    }
+}
+
+🔧 Refactor the class to include logic that uses the fields. Avoid creating a new class that still just has getters/setters.
+Respond with Java code only. No comments, no explanation.`
     );
   }
 );
+
+
 
 async function applyAIFix(document: vscode.TextDocument, issue: string) {
   vscode.window.showInformationMessage("Fetching AI fix suggestion...");
