@@ -1,5 +1,5 @@
 // services/MongoDB.ts
-import { MongoClient, Db } from "mongodb";
+import { MongoClient, Db, ObjectId } from "mongodb";
 
 export class MongoService {
   private static instance: MongoService;
@@ -32,10 +32,29 @@ export class MongoService {
     }
   }
 
-   public getDb(): Db {
+  public getDb(): Db {
     if (!this.db) {
       throw new Error("❌ MongoDB not connected. Call connect() first.");
     }
     return this.db;
+  }
+
+  // ✅ New method to get repo by name
+  public async getRepoIdByName(repoName: string): Promise<string | null> {
+    try {
+      const db = this.getDb();
+      const repo = await db.collection("Repos").findOne({ repoName });
+
+      if (repo && repo._id) {
+        console.log(`✅ Found repo ID for "${repoName}": ${repo._id.toString()}`);
+        return repo._id.toString();
+      } else {
+        console.log(`❌ No repository found for name: "${repoName}"`);
+        return null;
+      }
+    } catch (err) {
+      console.error("❌ Error fetching repo ID from MongoDB:", err);
+      return null;
+    }
   }
 }

@@ -71,7 +71,14 @@ export class GitHubAPI implements vscode.TreeDataProvider<TreeItem> {
                     } else {
                         const alreadySyncedItem = new TreeItem("Already Synced", [], vscode.TreeItemCollapsibleState.None);
                         alreadySyncedItem.iconPath = new vscode.ThemeIcon("check");
+                        alreadySyncedItem.command = {
+                            command: "extension.alreadySyncedInfo", // Use an appropriate command ID
+                            title: "Already Synced",
+                            tooltip: "This repository is already synced with the database",
+                            arguments: [owner, currentRepo] // Pass currentRepo here
+                        };
                         repoItems.push(alreadySyncedItem);
+                        ;
                     }
     
                     repoItems.unshift(currentRepoItem);

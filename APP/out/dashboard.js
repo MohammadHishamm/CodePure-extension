@@ -108,52 +108,88 @@ class CustomTreeProvider {
         return signInItem;
     }
     async fetchMetricsData() {
-        let resultsDir = path
-            .join(__dirname, "..", "src", "Results")
-            .replace(/out[\\\/]?/, "");
+        const treeItems = await this.GithubApi.fetchRepositoriesTreeItems();
+        let owner;
+        let repo;
+        let repoId = undefined;
+        for (const item of treeItems) {
+            if (item.label === "Already Synced" && item.command?.arguments) {
+                [owner, repo] = item.command.arguments;
+                console.log("Already Synced Repo:");
+                console.log("Owner:", owner);
+                console.log("Repo:", repo);
+                break;
+            }
+        }
+        if (owner && repo) {
+            try {
+                const mongo = MongoDB_1.MongoService.getInstance();
+                await mongo.connect();
+                const db = mongo.getDb();
+                const repoCollection = db.collection("Repos");
+                const repoDoc = await repoCollection.findOne({
+                    owner,
+                    "repositories.name": repo
+                });
+                if (repoDoc) {
+                    const matchingRepo = repoDoc.repositories.find((r) => r.name === repo);
+                    repoId = matchingRepo?._id || repoDoc._id;
+                    console.log("Found repository ID in database:", repoId);
+                }
+                else {
+                    console.log("Repository not found in database.");
+                }
+            }
+            catch (err) {
+                console.error("Error querying MongoDB for repository:", err);
+            }
+        }
+        else {
+            console.warn("Owner or repo not found, skipping DB lookup.");
+        }
+        let resultsDir = path.join(__dirname, "..", "src", "Results").replace(/out[\\\/]?/, "");
         console.log(`Fetching metrics from directory: ${resultsDir}`);
         if (!fs.existsSync(resultsDir)) {
             console.error("Results directory does not exist.");
-            return [
-                new TreeItem_1.TreeItem("No metrics data available", [], vscode.TreeItemCollapsibleState.None),
-            ];
+            return [new TreeItem_1.TreeItem("No metrics data available", [], vscode.TreeItemCollapsibleState.None)];
         }
         try {
-            // Always read the directory fresh to get the current files
-            console.log(`Reading directory contents of: ${resultsDir}`);
             const allFiles = fs.readdirSync(resultsDir);
-            console.log(`All files in directory: ${allFiles.join(", ")}`);
-            // Get all JSON files in the Results directory
             const files = allFiles.filter((file) => file.endsWith(".json"));
             if (files.length === 0) {
-                console.log("No metrics files found in directory.");
-                return [
-                    new TreeItem_1.TreeItem("No metrics data available", [], vscode.TreeItemCollapsibleState.None),
-                ];
+                return [new TreeItem_1.TreeItem("No metrics data available", [], vscode.TreeItemCollapsibleState.None)];
             }
-            console.log(`Found ${files.length} metrics files: ${files.join(", ")}`);
-            // Array to hold all metrics data
             const allMetricsData = [];
-            // Read and parse each JSON file
             for (const file of files) {
                 const filePath = path.join(resultsDir, file);
                 try {
-                    console.log(`Reading file: ${file}`);
                     const fileContent = fs.readFileSync(filePath, "utf8");
-                    if (fileContent.trim().length === 0) {
-                        console.log(`Empty file: ${file}`);
+                    if (fileContent.trim().length === 0)
                         continue;
-                    }
                     const metricsData = JSON.parse(fileContent);
-                    console.log(`Successfully parsed ${file}`);
-                    // Validate the structure we need
                     if (metricsData.fullPath &&
                         metricsData.folderName &&
                         Array.isArray(metricsData.metrics)) {
                         allMetricsData.push(metricsData);
-                    }
-                    else {
-                        console.log(`Invalid metrics structure in file: ${file}`);
+                        try {
+                            const mongo = MongoDB_1.MongoService.getInstance();
+                            await mongo.connect();
+                            const db = mongo.getDb();
+                            const metricsCollection = db.collection("Metrics");
+                            const documentToInsert = {
+                                fileName: path.basename(metricsData.fullPath),
+                                folderName: metricsData.folderName,
+                                fullPath: metricsData.fullPath,
+                                metrics: metricsData.metrics,
+                                repoId: repoId || null,
+                                savedAt: new Date()
+                            };
+                            await metricsCollection.insertOne(documentToInsert);
+                            console.log(`Saved metrics for ${documentToInsert.fileName} to database.`);
+                        }
+                        catch (dbInsertErr) {
+                            console.error(`Failed to insert metrics for ${metricsData.fullPath}:`, dbInsertErr);
+                        }
                     }
                 }
                 catch (parseError) {
@@ -161,44 +197,30 @@ class CustomTreeProvider {
                 }
             }
             if (allMetricsData.length === 0) {
-                console.log("No valid metrics data found in any files.");
-                return [
-                    new TreeItem_1.TreeItem("No valid metrics data available", [], vscode.TreeItemCollapsibleState.None),
-                ];
+                return [new TreeItem_1.TreeItem("No valid metrics data available", [], vscode.TreeItemCollapsibleState.None)];
             }
-            console.log(`Successfully loaded ${allMetricsData.length} metrics records`);
-            // Send metrics to server for predictions - only the most recent file
             const serverManager = new ServerMetricsManager_1.ServerMetricsManager();
             const response = await serverManager.sendMetricsFile();
-            // Update prediction cache with new predictions if available
             if (response?.predictions && Array.isArray(response.predictions)) {
                 response.predictions.forEach((prediction) => {
                     if (prediction.fileName) {
                         this.predictionCache.set(prediction.fileName, prediction);
-                        console.log(`Updated prediction cache for: ${prediction.fileName}`);
                     }
                 });
             }
-            // Create tree items for each metrics file
             const metricItems = allMetricsData.map((item) => {
                 const fileUri = vscode.Uri.file(item.fullPath);
                 const fileName = path.basename(item.fullPath);
                 const fileMetrics = item.metrics.map((metric) => new TreeItem_1.TreeItem(`🔎 ${metric.name}: ${metric.value}`, [], vscode.TreeItemCollapsibleState.None));
-                // Get prediction from cache if available
                 const filePrediction = this.predictionCache.get(fileName) || {};
-                // Create a copy of the prediction without the fileName property
                 const { fileName: _, ...predictionWithoutFileName } = filePrediction;
-                // Filter and display detected code smells
                 const detectedSmells = Object.entries(predictionWithoutFileName)
-                    .filter(([_, value]) => value === 1) // Only include detected smells (value = 1)
+                    .filter(([_, value]) => value === 1)
                     .map(([smell, _]) => new TreeItem_1.TreeItem(`⚠️ ${smell}: ‼️ Detected ‼️`, [], vscode.TreeItemCollapsibleState.None));
-                // If no code smells were detected, add a "No Code Smells" message
                 if (detectedSmells.length === 0) {
                     detectedSmells.push(new TreeItem_1.TreeItem("✅ No code smells ✅", [], vscode.TreeItemCollapsibleState.None));
                 }
-                // Create a tree item for this file with metrics and smells as children
-                const fileItem = new TreeItem_1.TreeItem(fileName, // Use just the filename as label
-                [...fileMetrics, ...detectedSmells], vscode.TreeItemCollapsibleState.Collapsed);
+                const fileItem = new TreeItem_1.TreeItem(fileName, [...fileMetrics, ...detectedSmells], vscode.TreeItemCollapsibleState.Collapsed);
                 fileItem.resourceUri = fileUri;
                 fileItem.tooltip = new vscode.MarkdownString(`[🔗 Click to open ${fileName}](command:vscode.open?${encodeURIComponent(JSON.stringify([fileUri.toString()]))})`);
                 fileItem.tooltip.isTrusted = true;
