@@ -57,4 +57,19 @@ export class MongoService {
       return null;
     }
   }
+
+  public async saveFeedback(feedbackText: string): Promise<boolean> {
+    try {
+      const db = this.getDb();
+      const result = await db.collection("feedbacks").insertOne({
+        text: feedbackText,
+        timestamp: new Date(),
+      });
+      console.log(`✅ Feedback saved with ID: ${result.insertedId}`);
+      return true;
+    } catch (err) {
+      console.error("❌ Error saving feedback to MongoDB:", err);
+      return false;
+    }
+  }
 }

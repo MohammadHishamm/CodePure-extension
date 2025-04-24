@@ -1,9 +1,10 @@
 import * as vscode from 'vscode';
 import * as fs from 'fs';
 import * as path from 'path';
+import { MongoService } from './services/MongoDB';
 
 // Command to handle the "Provide Feedback" click
-export function provideFeedbackCommand() {
+export async function provideFeedbackCommand() {
   const panel = vscode.window.createWebviewPanel(
     'feedbackForm',
     'Provide Feedback',
@@ -17,24 +18,22 @@ export function provideFeedbackCommand() {
 
   // Handle messages from the webview
   panel.webview.onDidReceiveMessage(
-    message => {
+    async message => {
       switch (message.command) {
         case 'submitFeedback':
-          vscode.window.showInformationMessage(`Feedback received: ${message.text}`);
-          
-          // Save feedback to a file (optional)
           try {
-            const feedbackPath = path.join(__dirname, "..", "src/Feedback", "feedback.txt");
+            const mongoService = MongoService.getInstance();
+            await mongoService.connect();
+            const saved = await mongoService.saveFeedback(message.text);
             
-            // Create directory if it doesn't exist
-            const dir = path.dirname(feedbackPath);
-            if (!fs.existsSync(dir)) {
-              fs.mkdirSync(dir, { recursive: true });
+            if (saved) {
+              vscode.window.showInformationMessage('Thank you for your feedback!');
+            } else {
+              vscode.window.showErrorMessage('Failed to save feedback. Please try again.');
             }
-            
-            fs.appendFileSync(feedbackPath, new Date().toISOString() + ": " + message.text + "\n");
           } catch (error) {
             console.error("Error saving feedback:", error);
+            vscode.window.showErrorMessage('Failed to save feedback. Please try again.');
           }
           
           panel.dispose(); // Close the panel
