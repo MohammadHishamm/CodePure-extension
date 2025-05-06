@@ -48,6 +48,7 @@ class CustomTreeProvider {
     isAuthenticated = false;
     GithubApi;
     predictionCache = new Map(); // Store predictions by filename
+    localrepoID;
     constructor() {
         this.GithubApi = new GithubAPI_1.GitHubAPI();
         this.loadPredictionCache();
@@ -144,12 +145,89 @@ class CustomTreeProvider {
             const serverManager = new ServerMetricsManager_1.ServerMetricsManager();
             const response = await serverManager.sendMetricsFile();
             if (response?.predictions && Array.isArray(response.predictions)) {
+                let owner;
+                let repo;
+                let repoId = undefined;
+                // Cache predictions by fileName
                 response.predictions.forEach((prediction) => {
                     if (prediction.fileName) {
                         this.predictionCache.set(prediction.fileName, prediction);
                     }
                 });
+                // Get synced GitHub repo info
+                const treeItems = await this.GithubApi.fetchRepositoriesTreeItems();
+                for (const item of treeItems) {
+                    if (item.label === "Already Synced" && item.command?.arguments) {
+                        [owner, repo] = item.command.arguments;
+                        console.log("Already Synced Repo Found:", { owner, repo });
+                        break;
+                    }
+                }
+                // Fetch repo ID from MongoDB
+                if (owner && repo) {
+                    try {
+                        const mongo = MongoDB_1.MongoService.getInstance();
+                        await mongo.connect();
+                        const db = mongo.getDb();
+                        const repoCollection = db.collection("Repos");
+                        const repoDoc = await repoCollection.findOne({
+                            owner,
+                            "repositories.name": repo
+                        });
+                        if (repoDoc) {
+                            const matchingRepo = repoDoc.repositories.find((r) => r.name === repo);
+                            repoId = matchingRepo?._id || repoDoc._id;
+                            this.localrepoID = repoId;
+                            console.log("Repository ID found in DB:", repoId);
+                        }
+                        else {
+                            console.log("Repository not found in DB.");
+                        }
+                    }
+                    catch (dbError) {
+                        console.error("Error querying repository from MongoDB:", dbError);
+                    }
+                }
+                else {
+                    console.warn("Owner or repo not found; skipping DB lookup.");
+                }
+                // Save predictions into MongoDB
+                try {
+                    const mongo = MongoDB_1.MongoService.getInstance();
+                    await mongo.connect();
+                    const db = mongo.getDb();
+                    const predictionCollection = db.collection("Predictions");
+                    for (const [fileName, predictionData] of this.predictionCache.entries()) {
+                        const shortFileName = path.basename(fileName); // Normalize file name
+                        const doc = {
+                            filePath: shortFileName,
+                            predictionfilename: shortFileName,
+                            Predictions: predictionData,
+                            repoId: repoId || null,
+                            savedAt: new Date()
+                        };
+                        console.log("Checking for existing prediction:", {
+                            filePath: shortFileName,
+                            repoId: repoId || null
+                        });
+                        const exists = await predictionCollection.findOne({
+                            filePath: shortFileName,
+                            ...(repoId ? { repoId } : {})
+                        });
+                        if (!exists) {
+                            await predictionCollection.insertOne(doc);
+                            console.log(`✅ Saved prediction for ${shortFileName}`);
+                        }
+                        else {
+                            console.log(`⚠️ Prediction for ${shortFileName} already exists. Skipping insertion.`);
+                        }
+                    }
+                }
+                catch (dbInsertErr) {
+                    console.error("❌ Failed to insert predictions:", dbInsertErr);
+                }
             }
+            // Build UI tree
             const metricItems = allMetricsData.map((item) => {
                 const fileUri = vscode.Uri.file(item.fullPath);
                 const fileName = path.basename(item.fullPath);
@@ -173,6 +251,7 @@ class CustomTreeProvider {
                 };
                 return fileItem;
             });
+            // Add "Clear History" command item
             const clearHistoryItem = new TreeItem_1.TreeItem("🗑️ Clear All History", [], vscode.TreeItemCollapsibleState.None);
             clearHistoryItem.command = {
                 command: "extension.clearHistory",
@@ -186,6 +265,34 @@ class CustomTreeProvider {
             return [
                 new TreeItem_1.TreeItem(`Error fetching metrics: ${err}`, [], vscode.TreeItemCollapsibleState.None),
             ];
+        }
+    }
+    async fetchPredictionsFromDB() {
+        try {
+            const mongo = MongoDB_1.MongoService.getInstance();
+            await mongo.connect();
+            const db = mongo.getDb();
+            const predictionCollection = db.collection("Predictions");
+            // Only fetch predictions for the current repo
+            const query = this.localrepoID ? { repoId: this.localrepoID } : {};
+            const predictions = await predictionCollection.find(query).toArray();
+            if (predictions.length === 0) {
+                return [new TreeItem_1.TreeItem("📭 No predictions found", [], vscode.TreeItemCollapsibleState.None)];
+            }
+            const treeItems = predictions.map((doc) => {
+                const smellItems = Object.entries(doc.Predictions)
+                    .filter(([key, value]) => key !== "fileName" && value === 1)
+                    .map(([smell]) => new TreeItem_1.TreeItem(`⚠️ ${smell} Detected`, [], vscode.TreeItemCollapsibleState.None));
+                if (smellItems.length === 0) {
+                    smellItems.push(new TreeItem_1.TreeItem("✅ No code smells", [], vscode.TreeItemCollapsibleState.None));
+                }
+                return new TreeItem_1.TreeItem(path.basename(doc.filePath), smellItems, vscode.TreeItemCollapsibleState.Collapsed);
+            });
+            return treeItems;
+        }
+        catch (err) {
+            console.error("Error fetching predictions from MongoDB:", err);
+            return [new TreeItem_1.TreeItem("❌ Failed to load predictions", [], vscode.TreeItemCollapsibleState.None)];
         }
     }
     update(metricsData) {
@@ -226,6 +333,7 @@ class CustomTreeProvider {
             return Promise.resolve([
                 new TreeItem_1.TreeItem("📊 Metrics Data", [], vscode.TreeItemCollapsibleState.Collapsed),
                 new TreeItem_1.TreeItem("📂 Current GitHub Repository", [], vscode.TreeItemCollapsibleState.Collapsed),
+                new TreeItem_1.TreeItem("Synced Predictions", [], vscode.TreeItemCollapsibleState.Collapsed),
                 viewUMLItem,
                 viewReportItem,
                 feedbackItem,
@@ -237,6 +345,9 @@ class CustomTreeProvider {
         }
         if (element.label === "📂 Current GitHub Repository") {
             return this.GithubApi.fetchRepositoriesTreeItems();
+        }
+        if (element.label === "Synced Predictions") {
+            return this.fetchPredictionsFromDB();
         }
         return Promise.resolve(element.children || []);
     }
@@ -388,86 +499,21 @@ class CustomTreeProvider {
             console.error("Error saving prediction cache:", error);
         }
     }
-    async loadPredictionCache() {
+    loadPredictionCache() {
         try {
-            // Resolve cache file path
-            const cacheDir = path.join(__dirname, "..", "src", "Cache").replace(/out[\\\/]?/, "");
-            const cacheFile = path.join(cacheDir, "prediction-cache.json");
-            // Initialize repo details
-            let owner;
-            let repo;
-            let repoId = undefined;
-            // Try to find the already synced repo from GitHub API
-            const treeItems = await this.GithubApi.fetchRepositoriesTreeItems();
-            for (const item of treeItems) {
-                if (item.label === "Already Synced" && item.command?.arguments) {
-                    [owner, repo] = item.command.arguments;
-                    console.log("Already Synced Repo Found:", { owner, repo });
-                    break;
-                }
-            }
-            // If a synced repo was found, try to find its ID from the MongoDB
-            if (owner && repo) {
-                try {
-                    const mongo = MongoDB_1.MongoService.getInstance();
-                    await mongo.connect();
-                    const db = mongo.getDb();
-                    const repoCollection = db.collection("Repos");
-                    const repoDoc = await repoCollection.findOne({
-                        owner,
-                        "repositories.name": repo
-                    });
-                    if (repoDoc) {
-                        const matchingRepo = repoDoc.repositories.find((r) => r.name === repo);
-                        repoId = matchingRepo?._id || repoDoc._id;
-                        console.log("Repository ID found in DB:", repoId);
-                    }
-                    else {
-                        console.log("Repository not found in DB.");
-                    }
-                }
-                catch (dbError) {
-                    console.error("Error querying repository from MongoDB:", dbError);
-                }
-            }
-            else {
-                console.warn("Owner or repo not found; skipping DB lookup.");
-            }
-            // Load prediction cache and store predictions in DB
-            if (fs.existsSync(cacheFile)) {
-                const cacheData = JSON.parse(fs.readFileSync(cacheFile, "utf8"));
+            const cacheDir = path.join(__dirname, "..", "src", "Cache");
+            const cachePath = cacheDir.replace(/out[\\\/]?/, "");
+            const cachefile = path.join(cachePath, "prediction-cache.json");
+            if (fs.existsSync(cachefile)) {
+                const cacheData = JSON.parse(fs.readFileSync(cachefile, "utf8"));
                 this.predictionCache = new Map(Object.entries(cacheData));
-                console.log("Prediction cache loaded successfully.");
-                // Save predictions to MongoDB
-                try {
-                    const mongo = MongoDB_1.MongoService.getInstance();
-                    await mongo.connect();
-                    const db = mongo.getDb();
-                    const predictionCollection = db.collection("Predictions");
-                    for (const [filePath, predictionData] of this.predictionCache.entries()) {
-                        const doc = {
-                            filePath,
-                            prediction: predictionData.prediction,
-                            confidence: predictionData.confidence,
-                            repoId: repoId || null,
-                            savedAt: new Date()
-                        };
-                        await predictionCollection.insertOne(doc);
-                        console.log(`Saved prediction for ${filePath}`);
-                    }
-                }
-                catch (dbInsertErr) {
-                    console.error("Failed to insert predictions:", dbInsertErr);
-                }
-            }
-            else {
-                console.warn("Prediction cache file does not exist.");
-                this.predictionCache = new Map();
+                console.log("Prediction cache loaded successfully");
             }
         }
         catch (error) {
             console.error("Error loading prediction cache:", error);
-            this.predictionCache = new Map(); // Initialize empty cache on failure
+            // Initialize empty cache if loading fails
+            this.predictionCache = new Map();
         }
     }
 }
