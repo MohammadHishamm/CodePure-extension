@@ -9,7 +9,8 @@ import { ServerMetricsManager } from "./services/ServerMetricsManager";
 import { MongoService } from "./services/MongoDB"; // Adjust the path as needed
 
 export class CustomTreeProvider
-  implements vscode.TreeDataProvider<TreeItem>, Observer {
+  implements vscode.TreeDataProvider<TreeItem>, Observer
+{
   private _onDidChangeTreeData: vscode.EventEmitter<
     TreeItem | undefined | null | void
   > = new vscode.EventEmitter();
@@ -21,7 +22,7 @@ export class CustomTreeProvider
   private isAuthenticated: boolean = false;
   private GithubApi;
   private predictionCache: Map<string, any> = new Map(); // Store predictions by filename
-  private localrepoID :any;
+  private localrepoID: any;
 
   constructor() {
     this.GithubApi = new GitHubAPI();
@@ -122,30 +123,44 @@ export class CustomTreeProvider
   }
 
   private async fetchMetricsData(): Promise<TreeItem[]> {
-    let resultsDir = path.join(__dirname, "..", "src", "Results").replace(/out[\\\/]?/, "");
+    let resultsDir = path
+      .join(__dirname, "..", "src", "Results")
+      .replace(/out[\\\/]?/, "");
     console.log(`Fetching metrics from directory: ${resultsDir}`);
-  
+
     if (!fs.existsSync(resultsDir)) {
       console.error("Results directory does not exist.");
-      return [new TreeItem("No metrics data available", [], vscode.TreeItemCollapsibleState.None)];
+      return [
+        new TreeItem(
+          "No metrics data available",
+          [],
+          vscode.TreeItemCollapsibleState.None
+        ),
+      ];
     }
-  
+
     try {
       const allFiles = fs.readdirSync(resultsDir);
       const files = allFiles.filter((file) => file.endsWith(".json"));
-  
+
       if (files.length === 0) {
-        return [new TreeItem("No metrics data available", [], vscode.TreeItemCollapsibleState.None)];
+        return [
+          new TreeItem(
+            "No metrics data available",
+            [],
+            vscode.TreeItemCollapsibleState.None
+          ),
+        ];
       }
-  
+
       const allMetricsData: any[] = [];
-  
+
       for (const file of files) {
         const filePath = path.join(resultsDir, file);
         try {
           const fileContent = fs.readFileSync(filePath, "utf8");
           if (fileContent.trim().length === 0) continue;
-  
+
           const metricsData = JSON.parse(fileContent);
           if (
             metricsData.fullPath &&
@@ -158,26 +173,32 @@ export class CustomTreeProvider
           console.error(`Error reading or parsing file ${file}:`, parseError);
         }
       }
-  
+
       if (allMetricsData.length === 0) {
-        return [new TreeItem("No valid metrics data available", [], vscode.TreeItemCollapsibleState.None)];
+        return [
+          new TreeItem(
+            "No valid metrics data available",
+            [],
+            vscode.TreeItemCollapsibleState.None
+          ),
+        ];
       }
-  
+
       const serverManager = new ServerMetricsManager();
       const response = await serverManager.sendMetricsFile();
-  
+
       if (response?.predictions && Array.isArray(response.predictions)) {
         let owner: string | undefined;
         let repo: string | undefined;
         let repoId: any = undefined;
-  
+
         // Cache predictions by fileName
         response.predictions.forEach((prediction: any) => {
           if (prediction.fileName) {
             this.predictionCache.set(prediction.fileName, prediction);
           }
         });
-  
+
         // Get synced GitHub repo info
         const treeItems = await this.GithubApi.fetchRepositoriesTreeItems();
         for (const item of treeItems) {
@@ -187,22 +208,24 @@ export class CustomTreeProvider
             break;
           }
         }
-  
+
         // Fetch repo ID from MongoDB
         if (owner && repo) {
           try {
             const mongo = MongoService.getInstance();
             await mongo.connect();
             const db = mongo.getDb();
-  
+
             const repoCollection = db.collection("Repos");
             const repoDoc = await repoCollection.findOne({
               owner,
-              "repositories.name": repo
+              "repositories.name": repo,
             });
-  
+
             if (repoDoc) {
-              const matchingRepo = repoDoc.repositories.find((r: any) => r.name === repo);
+              const matchingRepo = repoDoc.repositories.find(
+                (r: any) => r.name === repo
+              );
               repoId = matchingRepo?._id || repoDoc._id;
               this.localrepoID = repoId;
               console.log("Repository ID found in DB:", repoId);
@@ -215,78 +238,97 @@ export class CustomTreeProvider
         } else {
           console.warn("Owner or repo not found; skipping DB lookup.");
         }
-  
+
         // Save predictions into MongoDB
         try {
           const mongo = MongoService.getInstance();
           await mongo.connect();
           const db = mongo.getDb();
           const predictionCollection = db.collection("Predictions");
-  
-          for (const [fileName, predictionData] of this.predictionCache.entries()) {
+
+          for (const [
+            fileName,
+            predictionData,
+          ] of this.predictionCache.entries()) {
             const shortFileName = path.basename(fileName); // Normalize file name
             const doc = {
               filePath: shortFileName,
               predictionfilename: shortFileName,
               Predictions: predictionData,
               repoId: repoId || null,
-              savedAt: new Date()
+              savedAt: new Date(),
             };
-  
+
             console.log("Checking for existing prediction:", {
               filePath: shortFileName,
-              repoId: repoId || null
+              repoId: repoId || null,
             });
-  
+
             const exists = await predictionCollection.findOne({
               filePath: shortFileName,
-              ...(repoId ? { repoId } : {})
+              ...(repoId ? { repoId } : {}),
             });
-  
+
             if (!exists) {
               await predictionCollection.insertOne(doc);
               console.log(`✅ Saved prediction for ${shortFileName}`);
             } else {
-              console.log(`⚠️ Prediction for ${shortFileName} already exists. Skipping insertion.`);
+              console.log(
+                `⚠️ Prediction for ${shortFileName} already exists. Skipping insertion.`
+              );
             }
           }
         } catch (dbInsertErr) {
           console.error("❌ Failed to insert predictions:", dbInsertErr);
         }
       }
-  
+
       // Build UI tree
       const metricItems = allMetricsData.map((item) => {
         const fileUri = vscode.Uri.file(item.fullPath);
         const fileName = path.basename(item.fullPath);
-  
+
         const fileMetrics = item.metrics.map(
           (metric: { name: string; value: number }) =>
-            new TreeItem(`🔎 ${metric.name}: ${metric.value}`, [], vscode.TreeItemCollapsibleState.None)
+            new TreeItem(
+              `🔎 ${metric.name}: ${metric.value}`,
+              [],
+              vscode.TreeItemCollapsibleState.None
+            )
         );
-  
+
         const filePrediction = this.predictionCache.get(fileName) || {};
         const { fileName: _, ...predictionWithoutFileName } = filePrediction;
-  
-        const detectedSmells: TreeItem[] = Object.entries(predictionWithoutFileName)
+
+        const detectedSmells: TreeItem[] = Object.entries(
+          predictionWithoutFileName
+        )
           .filter(([_, value]) => value === 1)
           .map(
             ([smell, _]) =>
-              new TreeItem(`⚠️ ${smell}: ‼️ Detected ‼️`, [], vscode.TreeItemCollapsibleState.None)
+              new TreeItem(
+                `⚠️ ${smell}: ‼️ Detected ‼️`,
+                [],
+                vscode.TreeItemCollapsibleState.None
+              )
           );
-  
+
         if (detectedSmells.length === 0) {
           detectedSmells.push(
-            new TreeItem("✅ No code smells ✅", [], vscode.TreeItemCollapsibleState.None)
+            new TreeItem(
+              "✅ No code smells ✅",
+              [],
+              vscode.TreeItemCollapsibleState.None
+            )
           );
         }
-  
+
         const fileItem = new TreeItem(
           fileName,
           [...fileMetrics, ...detectedSmells],
           vscode.TreeItemCollapsibleState.Collapsed
         );
-  
+
         fileItem.resourceUri = fileUri;
         fileItem.tooltip = new vscode.MarkdownString(
           `[🔗 Click to open ${fileName}](command:vscode.open?${encodeURIComponent(
@@ -294,16 +336,16 @@ export class CustomTreeProvider
           )})`
         );
         fileItem.tooltip.isTrusted = true;
-  
+
         fileItem.command = {
           command: "vscode.open",
           title: `Open ${fileName}`,
           arguments: [fileUri],
         };
-  
+
         return fileItem;
       });
-  
+
       // Add "Clear History" command item
       const clearHistoryItem = new TreeItem(
         "🗑️ Clear All History",
@@ -315,7 +357,7 @@ export class CustomTreeProvider
         title: "Clear All History",
         tooltip: "Click to clear the metrics history",
       };
-  
+
       return [...metricItems, clearHistoryItem];
     } catch (err) {
       console.error("Error fetching metrics data:", err);
@@ -328,25 +370,29 @@ export class CustomTreeProvider
       ];
     }
   }
-  
-  
 
   private async fetchPredictionsFromDB(): Promise<TreeItem[]> {
     try {
       const mongo = MongoService.getInstance();
       await mongo.connect();
       const db = mongo.getDb();
-  
+
       const predictionCollection = db.collection("Predictions");
-  
+
       // Only fetch predictions for the current repo
       const query = this.localrepoID ? { repoId: this.localrepoID } : {};
       const predictions = await predictionCollection.find(query).toArray();
-  
+
       if (predictions.length === 0) {
-        return [new TreeItem("📭 No predictions found", [], vscode.TreeItemCollapsibleState.None)];
+        return [
+          new TreeItem(
+            "📭 No predictions found",
+            [],
+            vscode.TreeItemCollapsibleState.None
+          ),
+        ];
       }
-  
+
       const treeItems: TreeItem[] = predictions.map((doc: any) => {
         const smellItems = Object.entries(doc.Predictions)
           .filter(([key, value]) => key !== "fileName" && value === 1)
@@ -358,25 +404,37 @@ export class CustomTreeProvider
                 vscode.TreeItemCollapsibleState.None
               )
           );
-  
+
         if (smellItems.length === 0) {
-          smellItems.push(new TreeItem("✅ No code smells", [], vscode.TreeItemCollapsibleState.None));
+          smellItems.push(
+            new TreeItem(
+              "✅ No code smells",
+              [],
+              vscode.TreeItemCollapsibleState.None
+            )
+          );
         }
-  
+
         return new TreeItem(
           path.basename(doc.filePath),
           smellItems,
           vscode.TreeItemCollapsibleState.Collapsed
         );
       });
-  
+
       return treeItems;
     } catch (err) {
       console.error("Error fetching predictions from MongoDB:", err);
-      return [new TreeItem("❌ Failed to load predictions", [], vscode.TreeItemCollapsibleState.None)];
+      return [
+        new TreeItem(
+          "❌ Failed to load predictions",
+          [],
+          vscode.TreeItemCollapsibleState.None
+        ),
+      ];
     }
   }
-   
+
   update(metricsData: MetricsFileFormat[]): void {
     console.log(
       `Observer notified: Metrics updated with ${metricsData.length} items.`
@@ -446,11 +504,11 @@ export class CustomTreeProvider
           [],
           vscode.TreeItemCollapsibleState.Collapsed
         ),
-        new TreeItem(
-          "Synced Predictions",
-          [],
-          vscode.TreeItemCollapsibleState.Collapsed
-        ),
+        // new TreeItem(
+        //   "Synced Predictions",
+        //   [],
+        //   vscode.TreeItemCollapsibleState.Collapsed
+        // ),
         viewUMLItem,
         viewReportItem,
         feedbackItem,
@@ -469,7 +527,6 @@ export class CustomTreeProvider
     if (element.label === "Synced Predictions") {
       return this.fetchPredictionsFromDB();
     }
-
 
     return Promise.resolve(element.children || []);
   }
@@ -516,7 +573,6 @@ export class CustomTreeProvider
 
       const treeItems = await this.GithubApi.fetchRepositoriesTreeItems();
 
-
       const cleanRepoData = treeItems
         .filter((item) => item.label && item.label !== "Sync with Database")
         .map((item) => {
@@ -546,7 +602,6 @@ export class CustomTreeProvider
               };
             }) || [];
 
-
           return {
             name: repoName,
             owner: repoOwner,
@@ -554,12 +609,10 @@ export class CustomTreeProvider
           };
         });
 
-
       // Connect to MongoDB
       const mongo = MongoService.getInstance();
       await mongo.connect();
       const db = mongo.getDb();
-
 
       const usersCollection = db.collection("Users");
       const reposCollection = db.collection("Repos");
@@ -703,5 +756,4 @@ export class CustomTreeProvider
       this.predictionCache = new Map();
     }
   }
-
 }

@@ -42,13 +42,8 @@ export class DashboardPanel {
   }
 
   private refresh() {
-    const fileList = this._getFileNames();
-    this._panel.webview.html = this._getHtmlForWebview(fileList);
-  }
-
-  private _getFileNames(): string[] {
     const metricsData = this._getMetricsData();
-    return metricsData.map((file) => file.folderName);
+    this._panel.webview.html = this._getHtmlForWebview(metricsData);
   }
 
   private _getMetricsData() {
@@ -104,6 +99,8 @@ export class DashboardPanel {
             metricsData.folderName &&
             Array.isArray(metricsData.metrics)
           ) {
+            // Extract just the filename without path for display
+            metricsData.displayName = path.basename(metricsData.folderName);
             allMetricsData.push(metricsData);
           } else {
             console.log(`Invalid metrics structure in file: ${file}`);
@@ -144,7 +141,17 @@ export class DashboardPanel {
     }, undefined);
   }
 
-  private _getHtmlForWebview(fileList: string[]): string {
+  private _getHtmlForWebview(metricsData: any[]): string {
+    // Create the file list items with proper event handling
+    const fileListItems = metricsData
+      .map(
+        (file) =>
+          `<li class="file-item" data-fullpath="${file.folderName}" title="${
+            file.folderName
+          }">${file.displayName || path.basename(file.folderName)}</li>`
+      )
+      .join("");
+
     return `
       <!DOCTYPE html>
       <html lang="en">
@@ -183,9 +190,15 @@ export class DashboardPanel {
             border-radius: 6px; 
             transition: background 0.3s;
             font-size: 16px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
           }
           .file-item:hover { 
             background: #333; 
+          }
+          .file-item.active {
+            background: #1e8ad6;
           }
           /* Center charts in a column */
           .chart-container { 
@@ -215,59 +228,84 @@ export class DashboardPanel {
             width: 100% !important; 
             height: 350px !important; 
           }
+          #no-selection {
+            color: #888;
+            font-size: 18px;
+            text-align: center;
+          }
         </style>
       </head>
       <body>
         <div id="sidebar">
           <h3>Files</h3>
           <ul id="file-list">
-            ${fileList
-              .map(
-                (file) =>
-                  `<li class="file-item" onclick="selectFile('${file}')">${file}</li>`
-              )
-              .join("")}
+            ${fileListItems}
           </ul>
         </div>
-        <div class="chart-container" id="chart-container"></div>
+        <div class="chart-container" id="chart-container">
+          <div id="no-selection">Select a file to view metrics</div>
+        </div>
         
         <script>
           const vscode = acquireVsCodeApi();
-          function selectFile(fileName) {
-            vscode.postMessage({ type: "fileSelected", fileName });
-          }
+          
+          // Add click event listeners to all file items
+          document.querySelectorAll('.file-item').forEach(item => {
+            item.addEventListener('click', function() {
+              // Remove active class from all items
+              document.querySelectorAll('.file-item').forEach(i => 
+                i.classList.remove('active'));
+              
+              // Add active class to clicked item
+              this.classList.add('active');
+              
+              // Get the full path from data attribute
+              const fullPath = this.getAttribute('data-fullpath');
+              
+              // Send message to extension
+              vscode.postMessage({ 
+                type: "fileSelected", 
+                fileName: fullPath 
+              });
+            });
+          });
   
           window.addEventListener("message", event => {
             const { type, fileMetrics } = event.data;
             if (type === "updateCharts") {
-              document.getElementById("chart-container").innerHTML = fileMetrics.map((file, index) => \`
-                <div class="chart-wrapper">
-                  <h3>\${file.folderName}</h3>
-                  <canvas id="metricsChart\${index}"></canvas>
-                </div>
-              \`).join('');
-  
-              fileMetrics.forEach((file, index) => {
-                const ctxMetrics = document.getElementById("metricsChart" + index).getContext("2d");
-                new Chart(ctxMetrics, {
-                  type: "bar",
-                  data: {
-                    labels: file.metrics.map(m => m.name),
-                    datasets: [{
-                      label: "Metric Values",
-                      data: file.metrics.map(m => m.value),
-                      backgroundColor: "rgba(75, 192, 192, 0.2)",
-                      borderColor: "rgba(75, 192, 192, 1)",
-                      borderWidth: 1
-                    }]
-                  },
-                  options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    scales: { y: { beginAtZero: true } }
-                  }
+              if (fileMetrics && fileMetrics.length > 0) {
+                document.getElementById("chart-container").innerHTML = fileMetrics.map((file, index) => \`
+                  <div class="chart-wrapper">
+                    <h3>\${file.displayName || file.folderName}</h3>
+                    <canvas id="metricsChart\${index}"></canvas>
+                  </div>
+                \`).join('');
+    
+                fileMetrics.forEach((file, index) => {
+                  const ctxMetrics = document.getElementById("metricsChart" + index).getContext("2d");
+                  new Chart(ctxMetrics, {
+                    type: "bar",
+                    data: {
+                      labels: file.metrics.map(m => m.name),
+                      datasets: [{
+                        label: "Metric Values",
+                        data: file.metrics.map(m => m.value),
+                        backgroundColor: "rgba(75, 192, 192, 0.2)",
+                        borderColor: "rgba(75, 192, 192, 1)",
+                        borderWidth: 1
+                      }]
+                    },
+                    options: {
+                      responsive: true,
+                      maintainAspectRatio: false,
+                      scales: { y: { beginAtZero: true } }
+                    }
+                  });
                 });
-              });
+              } else {
+                document.getElementById("chart-container").innerHTML = 
+                  '<div id="no-selection">No metrics available for this file</div>';
+              }
             }
           });
         </script>
