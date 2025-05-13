@@ -44,23 +44,38 @@ export class UMLDashboard {
     this._panel.webview.html = this._getHtmlForWebview(mermaidCode);
   }
 
-  private _getExtractedUML(): any {
-    const filePath = path
-      .join(__dirname, "..", "src", "Uml", "ExtractedClasses.json")
-      .replace(/out[\\\/]?/, "");
+private _getExtractedUML(): any {
 
-    if (fs.existsSync(filePath)) {
-      try {
-        const rawData = fs.readFileSync(filePath, "utf8");
-        return JSON.parse(rawData);
-      } catch (err) {
-        console.error("❌ Error reading UML data:", err);
-        return { nodes: [], edges: [] };
-      }
+    // Ensure Results directory exists
+    const resultsDir = path.join(__dirname, "..", "uml").replace(/out[\\\/]?/, "");
+    if (!fs.existsSync(resultsDir)) {
+      fs.mkdirSync(resultsDir, { recursive: true });
     }
 
-    return { nodes: [], edges: [] };
+    // Save extracted UML data
+    // Save or Override extracted UML data
+    const filePath = path.join(resultsDir, "ExtractedClasses.json");
+
+  if (fs.existsSync(filePath)) {
+    try {
+      const rawData = fs.readFileSync(filePath, "utf8");
+
+      if (!rawData || rawData.trim() === "") {
+        console.warn("⚠️ UML data file is empty.");
+        return { nodes: [], edges: [] };
+      }
+
+      return JSON.parse(rawData);
+    } catch (err) {
+      console.error("❌ Error reading UML data:", err);
+      return { nodes: [], edges: [] };
+    }
   }
+
+  console.warn("⚠️ UML data file does not exist:", filePath);
+  return { nodes: [], edges: [] };
+}
+
 
   private _convertToMermaid(umlData: any): string {
     let mermaidCode = "classDiagram\n";

@@ -19,9 +19,10 @@ interface UMLData {
 
 export class UMLExtractor {
   public static extract(classesData: any) {
+
     if (!classesData || !Array.isArray(classesData.classes)) {
       console.error(
-        "❌ Invalid class data format:",
+        "Invalid class data format:",
         JSON.stringify(classesData, null, 2)
       );
       return;
@@ -32,20 +33,19 @@ export class UMLExtractor {
 
     for (const classFile of classesData.classes) {
       if (!Array.isArray(classFile.classes)) {
-        console.warn("⚠️ Skipping invalid class file:", classFile);
+        console.warn("Skipping invalid class file:", classFile);
         continue;
       }
 
       for (const classInfo of classFile.classes) {
         if (!classInfo.name) {
-          console.warn("⚠️ Skipping class without name:", classInfo);
+          console.warn("Skipping class without name:", classInfo);
           continue;
         }
 
         classNames.add(classInfo.name);
-        const classLabel = `${classInfo.isAbstract ? "Abstract " : ""}${
-          classInfo.isInterface ? "Interface " : ""
-        }${classInfo.name}`;
+        const classLabel = `${classInfo.isAbstract ? "Abstract " : ""}${classInfo.isInterface ? "Interface " : ""
+          }${classInfo.name}`;
         umlData.nodes.push({
           data: {
             id: classInfo.name,
@@ -86,9 +86,8 @@ export class UMLExtractor {
         // Fields (Associations)
         if (Array.isArray(classFile.fields)) {
           for (const field of classFile.fields) {
-            const fieldLabel = `Field: ${field.name} : ${
-              field.type || "unknown"
-            }`;
+            const fieldLabel = `Field: ${field.name} : ${field.type || "unknown"
+              }`;
             umlData.nodes.push({
               data: {
                 id: `${classInfo.name}.${field.name}`,
@@ -113,9 +112,8 @@ export class UMLExtractor {
             if (method.returnType == "No_Type") {
               method.returnType = "void";
             }
-            const methodLabel = `Method: ${method.name}(${
-              method.params?.join(", ") || ""
-            }) : ${method.returnType}`;
+            const methodLabel = `Method: ${method.name}(${method.params?.join(", ") || ""
+              }) : ${method.returnType}`;
             umlData.nodes.push({
               data: {
                 id: `${classInfo.name}.${method.name}`,
@@ -128,21 +126,21 @@ export class UMLExtractor {
     }
 
     // Ensure Results directory exists
-    const resultsDir = path
-      .join(__dirname, "..", "src", "Uml")
-      .replace(/out[\\\/]?/, "");
+    const resultsDir = path.join(__dirname, "..", "uml").replace(/out[\\\/]?/, "");
     if (!fs.existsSync(resultsDir)) {
       fs.mkdirSync(resultsDir, { recursive: true });
     }
 
+    // Save extracted UML data
     // Save or Override extracted UML data
     const filePath = path.join(resultsDir, "ExtractedClasses.json");
+
     try {
       // Writing new UML data, this will override the existing content.
       fs.writeFileSync(filePath, JSON.stringify(umlData, null, 2), "utf8");
-      console.log("✅ UML data successfully written to", filePath);
+      console.log("UML data successfully written to", filePath);
     } catch (err) {
-      console.error("❌ Error writing UML data:", err);
+      console.error("Error writing UML data:", err);
     }
   }
 
