@@ -35,16 +35,26 @@ var __importStar = (this && this.__importStar) || (function () {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.handleEvents = handleEvents;
 const vscode = __importStar(require("vscode"));
+const AnalyzeCode_1 = require("./services/AnalyzeCode");
 const ProblemsChecker_1 = require("./services/ProblemsChecker");
 const SupportedFileTypes_1 = require("./services/SupportedFileTypes");
-const AnalyzeCode_1 = require("./services/AnalyzeCode");
 function handleEvents(context) {
     vscode.workspace.onDidSaveTextDocument(async (document) => {
         const problemsChecker = new ProblemsChecker_1.ProblemsChecker(document);
         const isSupportedfiletype = new SupportedFileTypes_1.isSupportedFileType(document);
+        const sourceCode = document.getText();
+        if (sourceCode.trim() === "") {
+            vscode.window.showWarningMessage("File is Empty:", document.fileName);
+            console.warn("File is Empty", document.fileName);
+            return;
+        }
+        else if (document.lineCount < 10) {
+            vscode.window.showWarningMessage("File too small to analyze for code smells:", document.fileName);
+            console.warn("File too small to analyze for code smells:", document.fileName);
+            return;
+        }
         if (!problemsChecker.checkForErrors() &&
             isSupportedfiletype.isSupported()) {
-            const sourceCode = document.getText();
             await (0, AnalyzeCode_1.analyzeCode)(document, sourceCode);
         }
     });

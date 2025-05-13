@@ -1,6 +1,6 @@
-import * as vscode from "vscode";
 import * as fs from "fs";
 import * as path from "path";
+import * as vscode from "vscode";
 import { UMLExtractor } from "./services/UMLExtractor";
 
 export class UMLDashboard {
@@ -39,65 +39,52 @@ export class UMLDashboard {
 
   private _update() {
     const umlData = this._getExtractedUML();
-    const mermaidCode = this._convertToMermaid(umlData);
+    const hasData = umlData.nodes.length > 0 || umlData.edges.length > 0;
+    const mermaidCode = hasData ? this._convertToMermaid(umlData) : "";
 
-    this._panel.webview.html = this._getHtmlForWebview(mermaidCode);
+    this._panel.webview.html = this._getHtmlForWebview(mermaidCode, hasData);
   }
 
-private _getExtractedUML(): any {
-
-    // Ensure Results directory exists
+  private _getExtractedUML(): any {
     const resultsDir = path.join(__dirname, "..", "uml").replace(/out[\\\/]?/, "");
     if (!fs.existsSync(resultsDir)) {
       fs.mkdirSync(resultsDir, { recursive: true });
     }
 
-    // Save extracted UML data
-    // Save or Override extracted UML data
     const filePath = path.join(resultsDir, "ExtractedClasses.json");
 
-  if (fs.existsSync(filePath)) {
-    try {
-      const rawData = fs.readFileSync(filePath, "utf8");
-
-      if (!rawData || rawData.trim() === "") {
-        console.warn("⚠️ UML data file is empty.");
+    if (fs.existsSync(filePath)) {
+      try {
+        const rawData = fs.readFileSync(filePath, "utf8");
+        if (!rawData || rawData.trim() === "") {
+          console.warn("⚠️ UML data file is empty.");
+          return { nodes: [], edges: [] };
+        }
+        return JSON.parse(rawData);
+      } catch (err) {
+        console.error("❌ Error reading UML data:", err);
         return { nodes: [], edges: [] };
       }
-
-      return JSON.parse(rawData);
-    } catch (err) {
-      console.error("❌ Error reading UML data:", err);
-      return { nodes: [], edges: [] };
     }
+
+    console.warn("⚠️ UML data file does not exist:", filePath);
+    return { nodes: [], edges: [] };
   }
-
-  console.warn("⚠️ UML data file does not exist:", filePath);
-  return { nodes: [], edges: [] };
-}
-
 
   private _convertToMermaid(umlData: any): string {
     let mermaidCode = "classDiagram\n";
-
     const classMembers: Record<string, string[]> = {};
 
     for (const node of umlData.nodes) {
       const nodeId = node.data.id;
       const nodeLabel = node.data.label;
 
-      // Detect fields
       if (nodeLabel.startsWith("Field: ")) {
-        const [fieldName, fieldType] = nodeLabel
-          .replace("Field: ", "")
-          .split(" : ");
+        const [fieldName, fieldType] = nodeLabel.replace("Field: ", "").split(" : ");
         const className = nodeId.split(".")[0];
         if (!classMembers[className]) classMembers[className] = [];
         classMembers[className].push(`  - ${fieldName}: ${fieldType}`);
-      }
-
-      // Detect methods
-      else if (nodeLabel.startsWith("Method: ")) {
+      } else if (nodeLabel.startsWith("Method: ")) {
         const methodSignature = nodeLabel.replace("Method: ", "+ ");
         const className = nodeId.split(".")[0];
         if (!classMembers[className]) classMembers[className] = [];
@@ -105,12 +92,10 @@ private _getExtractedUML(): any {
       }
     }
 
-    // Add classes and their members
     for (const node of umlData.nodes) {
-      // Lw Class
       if (!node.data.id.includes(".")) {
         const className = node.data.id;
-        if (classMembers[className] && classMembers[className].length > 0) {
+        if (classMembers[className]?.length) {
           mermaidCode += `  class ${className} {\n`;
           mermaidCode += classMembers[className].join("\n") + "\n";
           mermaidCode += "}\n";
@@ -120,7 +105,6 @@ private _getExtractedUML(): any {
       }
     }
 
-    // Add relationships
     for (const edge of umlData.edges) {
       if (edge.data.label === "inherits") {
         mermaidCode += `  ${edge.data.target} <|-- ${edge.data.source}\n`;
@@ -134,7 +118,11 @@ private _getExtractedUML(): any {
     return mermaidCode;
   }
 
-  private _getHtmlForWebview(mermaidCode: string): string {
+  private _getHtmlForWebview(mermaidCode: string, hasData: boolean): string {
+    const diagramHtml = hasData
+      ? `<div class="mermaid">${mermaidCode}</div>`
+      : `<div class="no-data">🚫 No UML data to generate</div>`;
+
     return `
       <!DOCTYPE html>
       <html lang="en">
@@ -142,201 +130,72 @@ private _getExtractedUML(): any {
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
-  
         <title>CodePure Class Diagram</title>
         <style>
-          * {
-            box-sizing: border-box;
+          body {
+            font-family: Arial, sans-serif;
+            background: #1e1e1e;
+            color: #ffffff;
             margin: 0;
             padding: 0;
-          }
-  
-          body { 
-            font-family: "Arial", sans-serif; 
-            background: #1e1e1e; 
-            color: #ffffff; 
-            display: flex; 
-            flex-direction: column; 
-            align-items: center; 
-            justify-content: center; 
-            height: 100vh; 
-            width: 100vw;
-            margin: 0; 
-            overflow: hidden;
-          }
-  
-          h2 {
-            text-align: center;
-            margin-bottom: 20px;
-          }
-  
-          #loading {
+            height: 100vh;
             display: flex;
             flex-direction: column;
             align-items: center;
             justify-content: center;
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
           }
-  
-          .spinner {
-            width: 60px;
-            height: 60px;
-            border: 6px solid rgba(255, 255, 255, 0.3);
-            border-top: 6px solid #ffffff;
-            border-radius: 50%;
-            animation: spin 1s linear infinite;
+          h2 {
+            margin-bottom: 20px;
           }
-  
-          .loading-text {
-            margin-top: 10px;
-            font-size: 16px;
-            font-weight: bold;
-            color: #ffffff;
-            text-shadow: 0 0 5px rgba(255, 255, 255, 0.5);
-          }
-  
-          @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
-          }
-  
           #uml-container {
-            opacity: 0;
-            transition: opacity 1s ease-in-out;
             width: 90%;
             max-width: 1200px;
+            text-align: center;
           }
-  
           .mermaid {
-            background: #ffffff !important;
+            background: #fff;
+            color: #000;
             padding: 20px;
             border-radius: 8px;
-            box-shadow: 0 0 15px rgba(255, 255, 255, 0.2);
-            transition: transform 0.3s ease-in-out;
-            text-align: center;
-            min-height: 200px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
+            box-shadow: 0 0 10px rgba(255, 255, 255, 0.2);
           }
-  
-          .mermaid:hover {
-            transform: scale(1.02);
+          .no-data {
+            font-size: 18px;
+            color: #ff6b6b;
+            background: rgba(255, 255, 255, 0.05);
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 0 10px rgba(255, 0, 0, 0.2);
           }
-  
-          .export-buttons {
-            display: none;
+          .refresh-btn, .save-btn {
             margin-top: 20px;
-            gap: 10px;
-          }
-  
-          .export-buttons button {
-            background: #0078D4;
+            padding: 10px 20px;
+            background-color: #007acc;
             color: white;
             border: none;
-            padding: 10px 15px;
-            cursor: pointer;
             border-radius: 5px;
-            transition: background 0.3s;
-            font-size: 14px;
+            cursor: pointer;
           }
-  
-          .export-buttons button:hover {
-            background: #005fa3;
+          .refresh-btn:hover, .save-btn:hover {
+            background-color: #005f8b;
           }
         </style>
       </head>
       <body>
         <h2>CodePure UML Diagram</h2>
-        <div id="loading">
-          <div class="spinner"></div>
-          <div class="loading-text">Generating UML...</div>
-        </div>
-        <div id="uml-container">
-          <div class="mermaid">
-            ${mermaidCode}
-          </div>
-        </div>
-        <div class="export-buttons" id="export-btn">
-          <button onclick="saveUmlFile('svg')">💾 Save as SVG</button>
-          <button onclick="saveUmlFile('png')">💾 Save as PNG</button>
-        </div>
-  
+        <div id="uml-container">${diagramHtml}</div>
+
         <script>
           const vscode = acquireVsCodeApi();
-  
           document.addEventListener("DOMContentLoaded", () => {
-            const loading = document.getElementById("loading");
-            const umlContainer = document.getElementById("uml-container");
-            const exportButtons = document.getElementById("export-btn");
-  
-            loading.style.display = "flex";
-  
-            mermaid.initialize({ startOnLoad: false });
-  
-            setTimeout(() => {
-              mermaid.init(undefined, ".mermaid").then(() => {
-                loading.style.display = "none";
-                umlContainer.style.opacity = "1";
-                exportButtons.style.display = "flex";
-              }).catch((error) => {
-                console.error("Error during mermaid initialization:", error);
-                alert("Failed to generate UML diagram. Check the console for details.");
+            ${hasData ? `
+              mermaid.initialize({ startOnLoad: false });
+              mermaid.init(undefined, ".mermaid").catch(err => {
+                console.error("Mermaid error:", err);
               });
-            }, 1000);
+            ` : ""}
+
           });
-  
-          function saveUmlFile(format) {
-            const svgElement = document.querySelector(".mermaid svg");
-  
-            if (!svgElement) {
-              console.error("Error: UML diagram not found!");
-              alert("Error: UML diagram not found!");
-              return;
-            }
-  
-            const serializer = new XMLSerializer();
-            const svgString = serializer.serializeToString(svgElement);
-  
-            if (format === "svg") {
-              vscode.postMessage({ type: "saveUml", fileType: "svg", content: svgString });
-            } else if (format === "png") {
-              convertSvgToPng(svgString);
-            }
-          }
-  
-          function convertSvgToPng(svgString) {
-            const canvas = document.createElement("canvas");
-            const ctx = canvas.getContext("2d");
-            const img = new Image();
-            const svgBlob = new Blob([svgString], { type: "image/svg+xml;charset=utf-8" });
-            const url = URL.createObjectURL(svgBlob);
-  
-            img.onload = function () {
-              canvas.width = img.width;
-              canvas.height = img.height;
-              ctx.drawImage(img, 0, 0);
-              URL.revokeObjectURL(url);
-  
-              canvas.toBlob((blob) => {
-                const reader = new FileReader();
-                reader.readAsDataURL(blob);
-                reader.onloadend = function () {
-                  vscode.postMessage({ type: "saveUml", fileType: "png", content: reader.result });
-                };
-              }, "image/png");
-            };
-  
-            img.onerror = function (error) {
-              console.error("Error while loading SVG image:", error);
-              alert("Error while loading SVG image.");
-            };
-  
-            img.src = url;
-          }
         </script>
       </body>
       </html>
