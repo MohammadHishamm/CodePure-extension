@@ -30,12 +30,10 @@ export class FolderExtractComponentsFromCode {
       const fileHash = FileCacheManager.computeHash(fileContent);
       const cachedComponents = this.cacheManager.get(filePath, fileHash);
 
-      if (cachedComponents) 
-      {
+      if (cachedComponents) {
         console.log(`Cache hit: ${filePath}`);
-      } 
-      else 
-      {
+      }
+      else {
         const parsedComponents = await this.parseFile(fileUri);
         if (parsedComponents) {
 
@@ -67,8 +65,13 @@ export class FolderExtractComponentsFromCode {
         const fileName = component.classes[0]?.fileName || 'UnknownFile';
         const baseName = path.basename(fileName, path.extname(fileName));  // Get the base name (without extension)
 
-        // Ensure the file is saved with a name matching the baseName for easy retrieval
-        const filePath = path.join(__dirname, "..", "src", "ExtractedFileComponents", `${baseName}.json`).replace(/out[\\\/]?/, "");
+        const filePath = path.join(__dirname, "..", "ExtractedFileComponents", `${baseName}.json`);
+
+        // Ensure the directory exists
+        const dir = path.dirname(filePath);
+        if (!fs.existsSync(dir)) {
+          fs.mkdirSync(dir, { recursive: true });
+        }
 
         const newContent = JSON.stringify(component, null, 2);
         fs.writeFileSync(filePath, newContent);
@@ -81,10 +84,10 @@ export class FolderExtractComponentsFromCode {
   }
 
 
-  
+
   public async deleteAllResultsFiles() {
     try {
-      const resultsDir = path.join(__dirname, "..", "src", "ExtractedFileComponents").replace(/out[\\\/]?/, "");
+      const resultsDir = path.join(__dirname, "..", "Results");
 
       // Check if the Results directory exists
       if (fs.existsSync(resultsDir)) {
@@ -111,7 +114,7 @@ export class FolderExtractComponentsFromCode {
 
   public async deleteSpecificFile(fileName: string) {
     try {
-      const resultsDir = path.join(__dirname, "..", "src", "ExtractedFileComponents").replace(/out[\\\/]?/, "");
+      const resultsDir = path.join(__dirname, "..", "ExtractedFileComponents");
       const filePath = path.join(resultsDir, fileName);
 
       // Check if the specific file exists
@@ -129,7 +132,7 @@ export class FolderExtractComponentsFromCode {
   public getParsedComponentsByFileName(fileName: string): FileParsedComponents | null {
     try {
       let resultsDir = path.join(__dirname, "..", "ExtractedFileComponents");
-      resultsDir = resultsDir.replace('out', 'src');
+
       const files = fs.readdirSync(resultsDir);  // Read all files in the Results folder
       let parsedComponents;
 
@@ -164,45 +167,45 @@ export class FolderExtractComponentsFromCode {
 
   public getAllParsedComponents(): FileParsedComponents {
     try {
-        const resultsDir = path.join(__dirname, "..", "src", "ExtractedFileComponents").replace(/out[\\\/]?/, "");
+      const resultsDir = path.join(__dirname, "..", "ExtractedFileComponents");
 
-        if (!fs.existsSync(resultsDir)) {
-            console.error("ExtractedFileComponents directory does not exist:", resultsDir);
-            return { classes: [] };  // Return empty structure
+      if (!fs.existsSync(resultsDir)) {
+        console.error("ExtractedFileComponents directory does not exist:", resultsDir);
+        return { classes: [] };  // Return empty structure
+      }
+
+      const files = fs.readdirSync(resultsDir);
+      const allClasses: any[] = []; // Store all extracted classes
+
+      for (const file of files) {
+        const filePath = path.join(resultsDir, file);
+
+        if (!file.endsWith(".json")) continue;
+
+        const fileContent = fs.readFileSync(filePath, "utf8").trim();
+        if (!fileContent) {
+          console.warn(`Skipping empty file: ${filePath}`);
+          continue;
         }
 
-        const files = fs.readdirSync(resultsDir);
-        const allClasses: any[] = []; // Store all extracted classes
+        try {
+          const parsedComponent: FileParsedComponents = JSON.parse(fileContent);
 
-        for (const file of files) {
-            const filePath = path.join(resultsDir, file);
-
-            if (!file.endsWith(".json")) continue;
-
-            const fileContent = fs.readFileSync(filePath, "utf8").trim();
-            if (!fileContent) {
-                console.warn(`Skipping empty file: ${filePath}`);
-                continue;
-            }
-
-            try {
-                const parsedComponent: FileParsedComponents = JSON.parse(fileContent);
-                
-                // Extract and merge all classes from each file into allClasses array
-                if (parsedComponent.classes && Array.isArray(parsedComponent.classes)) {
-                    allClasses.push(...parsedComponent.classes);
-                }
-            } catch (parseErr) {
-                console.error(`Error parsing JSON file: ${filePath}`, parseErr);
-            }
+          // Extract and merge all classes from each file into allClasses array
+          if (parsedComponent.classes && Array.isArray(parsedComponent.classes)) {
+            allClasses.push(...parsedComponent.classes);
+          }
+        } catch (parseErr) {
+          console.error(`Error parsing JSON file: ${filePath}`, parseErr);
         }
+      }
 
-        return { classes: allClasses };  // Return a single object with all classes merged
+      return { classes: allClasses };  // Return a single object with all classes merged
     } catch (err) {
-        console.error("Failed to get all parsed components", err);
-        return { classes: [] }; // Return empty structure in case of failure
+      console.error("Failed to get all parsed components", err);
+      return { classes: [] }; // Return empty structure in case of failure
     }
-}
+  }
 
 
 

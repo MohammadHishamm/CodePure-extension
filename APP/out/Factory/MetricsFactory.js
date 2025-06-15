@@ -16,10 +16,6 @@ const JavaWOC_1 = require("../Metrics/Java/JavaWOC");
 const JavaDIT_1 = require("../Metrics/Java/JavaDIT");
 const JavaNAS_1 = require("../Metrics/Java/JavaNAS");
 const JavaTCC_1 = require("../Metrics/Java/JavaTCC");
-const PythonCC_1 = require("../Metrics/Python/PythonCC");
-const PythonNOA_1 = require("../Metrics/Python/PythonNOA");
-const PythonNOAM_1 = require("../Metrics/Python/PythonNOAM");
-const PythonNOM_1 = require("../Metrics/Python/PythonNOM");
 const JavaFDP_1 = require("../Metrics/Java/JavaFDP");
 const JavaPNAS_1 = require("../Metrics/Java/JavaPNAS");
 const JavaCBO_1 = require("../Metrics/Java/JavaCBO");
@@ -30,7 +26,6 @@ class MetricsFactory {
             case "java":
                 return MetricsFactory.createJavaMetric(metricName);
             case "python":
-                return MetricsFactory.createPythonMetric(metricName);
             default:
                 return null;
         }
@@ -88,23 +83,6 @@ class MetricsFactory {
                 return new JavaTCC_1.TCCCalculation();
             case "DIT":
                 return new JavaDIT_1.JavaDepthOfInheritanceTree();
-            default:
-                return null;
-        }
-    }
-    // Dynamically create Python metric object
-    static createPythonMetric(metricName) {
-        switch (metricName) {
-            case "LOC":
-            // return new PythonLOCMetric();
-            case "CC":
-                return new PythonCC_1.PythonCyclomaticComplexityMetric();
-            case "NOA":
-                return new PythonNOA_1.PythonNumberofAttributesMetric();
-            case "NOM":
-                return new PythonNOM_1.PythonNumberOfMethodsMetric();
-            case "NOAM":
-                return new PythonNOAM_1.PythonNumberOfAccessorMethods();
             default:
                 return null;
         }

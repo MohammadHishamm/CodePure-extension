@@ -46,9 +46,15 @@ export class CustomTreeProvider
     this.checkAuthentication();
 
     // Set up file system watcher for the Results directory
-    const resultsDir = path
-      .join(__dirname, "..", "src", "Results")
-      .replace(/out[\\\/]?/, "");
+ const resultsDir = path.join(__dirname,  "Results");
+
+// Create directory if it does not exist
+if (!fs.existsSync(resultsDir)) {
+  fs.mkdirSync(resultsDir, { recursive: true });
+  console.log(`✅ Created missing Results directory at: ${resultsDir}`);
+}
+
+ 
 
     if (fs.existsSync(resultsDir)) {
       const watcher = vscode.workspace.createFileSystemWatcher(
@@ -124,8 +130,8 @@ export class CustomTreeProvider
 
   private async fetchMetricsData(): Promise<TreeItem[]> {
     let resultsDir = path
-      .join(__dirname, "..", "src", "Results")
-      .replace(/out[\\\/]?/, "");
+      .join(__dirname, "Results")
+     
     console.log(`Fetching metrics from directory: ${resultsDir}`);
 
     if (!fs.existsSync(resultsDir)) {
@@ -686,8 +692,8 @@ export class CustomTreeProvider
     }
 
     // Get the path to the Results directory
-    let resultsDir = path.join(__dirname, "..", "src", "Results");
-    resultsDir = resultsDir.replace(/out[\\\/]?/, "");
+    let resultsDir = path.join(__dirname , "Results");
+
 
     try {
       if (fs.existsSync(resultsDir)) {
@@ -722,8 +728,8 @@ export class CustomTreeProvider
 
   private savePredictionCache(): void {
     try {
-      const cacheDir = path.join(__dirname, "..", "src", "Cache");
-      const cachePath = cacheDir.replace(/out[\\\/]?/, "");
+      const cacheDir = path.join(__dirname, "Cache");
+      const cachePath = cacheDir;
 
       // Create cache directory if it doesn't exist
       if (!fs.existsSync(cachePath)) {
@@ -741,8 +747,8 @@ export class CustomTreeProvider
 
   private loadPredictionCache(): void {
     try {
-      const cacheDir = path.join(__dirname, "..", "src", "Cache");
-      const cachePath = cacheDir.replace(/out[\\\/]?/, "");
+      const cacheDir = path.join(__dirname,"Cache");
+      const cachePath = cacheDir;
       const cachefile = path.join(cachePath, "prediction-cache.json");
 
       if (fs.existsSync(cachefile)) {

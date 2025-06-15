@@ -4,6 +4,7 @@
   "description": "Code smells detector",
   "version": "0.0.1",
   "private": true,
+  "publisher": "ZMOM",
   "engines": {
     "vscode": "^1.93.0"
   },
@@ -14,7 +15,7 @@
     "type": "git",
     "url": "git+https://github.com/MohammadHishamm/Graduation-Project.git"
   },
-  "icon": "./src/Assets/codepure-logo.png",
+  "icon": "./codepure-logo.png",
   "categories": [
     "Other"
   ],
@@ -29,14 +30,14 @@
         {
           "id": "codepure",
           "title": "CodePure",
-          "icon": "./src/Assets/codepure-icon.png"
+          "icon": "./codepure-icon.png"
         }
       ]
     },
     "views": {
       "codepure": [
         {
-          "icon": "./src/Assets/codepure-logo.png",
+          "icon": "./codepure-logo.png",
           "id": "codepureTreeView",
           "name": ""
         }
@@ -182,8 +183,9 @@
     }
   },
   "scripts": {
+    "clean": "rimraf out",
+    "compile": "npm run clean && tsc -p ./",
     "vscode:prepublish": "npm run compile",
-    "compile": "tsc -p ./ ",
     "watch": "tsc -watch -p ./",
     "pretest": "npm run compile && npm run lint",
     "lint": "eslint src",
@@ -199,17 +201,16 @@
     "@vscode/test-cli": "^0.0.10",
     "@vscode/test-electron": "^2.4.1",
     "eslint": "^9.9.1",
+    "rimraf": "^6.0.1",
     "typescript": "^5.5.4"
   },
   "dependencies": {
     "@google/generative-ai": "^0.24.0",
     "@types/mongodb": "^4.0.6",
-    "dotenv": "^16.4.7",
     "mongodb": "^6.15.0",
     "node-fetch": "^2.6.1",
     "tree-sitter": "^0.21.1",
-    "tree-sitter-java": "^0.23.4",
-    "tree-sitter-python": "^0.23.4"
+    "tree-sitter-java": "^0.23.4"
   },
   "keywords": [],
   "author": "",

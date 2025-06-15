@@ -126,7 +126,7 @@ export class UMLExtractor {
     }
 
     // Ensure Results directory exists
-    const resultsDir = path.join(__dirname, "..", "uml").replace(/out[\\\/]?/, "");
+    const resultsDir = path.join(__dirname, "..", "uml");
     if (!fs.existsSync(resultsDir)) {
       fs.mkdirSync(resultsDir, { recursive: true });
     }

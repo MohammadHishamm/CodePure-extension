@@ -90,8 +90,12 @@ class FolderExtractComponentsFromCode {
             parsedComponents.forEach((component) => {
                 const fileName = component.classes[0]?.fileName || 'UnknownFile';
                 const baseName = path.basename(fileName, path.extname(fileName)); // Get the base name (without extension)
-                // Ensure the file is saved with a name matching the baseName for easy retrieval
-                const filePath = path.join(__dirname, "..", "src", "ExtractedFileComponents", `${baseName}.json`).replace(/out[\\\/]?/, "");
+                const filePath = path.join(__dirname, "..", "ExtractedFileComponents", `${baseName}.json`);
+                // Ensure the directory exists
+                const dir = path.dirname(filePath);
+                if (!fs.existsSync(dir)) {
+                    fs.mkdirSync(dir, { recursive: true });
+                }
                 const newContent = JSON.stringify(component, null, 2);
                 fs.writeFileSync(filePath, newContent);
                 console.log(`Saved parsed component for file: ${baseName}`);
@@ -103,7 +107,7 @@ class FolderExtractComponentsFromCode {
     }
     async deleteAllResultsFiles() {
         try {
-            const resultsDir = path.join(__dirname, "..", "src", "ExtractedFileComponents").replace(/out[\\\/]?/, "");
+            const resultsDir = path.join(__dirname, "..", "Results");
             // Check if the Results directory exists
             if (fs.existsSync(resultsDir)) {
                 // Get all files in the Results directory
@@ -128,7 +132,7 @@ class FolderExtractComponentsFromCode {
     }
     async deleteSpecificFile(fileName) {
         try {
-            const resultsDir = path.join(__dirname, "..", "src", "ExtractedFileComponents").replace(/out[\\\/]?/, "");
+            const resultsDir = path.join(__dirname, "..", "ExtractedFileComponents");
             const filePath = path.join(resultsDir, fileName);
             // Check if the specific file exists
             if (fs.existsSync(filePath) && fs.lstatSync(filePath).isFile()) {
@@ -146,7 +150,6 @@ class FolderExtractComponentsFromCode {
     getParsedComponentsByFileName(fileName) {
         try {
             let resultsDir = path.join(__dirname, "..", "ExtractedFileComponents");
-            resultsDir = resultsDir.replace('out', 'src');
             const files = fs.readdirSync(resultsDir); // Read all files in the Results folder
             let parsedComponents;
             // Loop through the files, read their content, and parse it
@@ -172,7 +175,7 @@ class FolderExtractComponentsFromCode {
     }
     getAllParsedComponents() {
         try {
-            const resultsDir = path.join(__dirname, "..", "src", "ExtractedFileComponents").replace(/out[\\\/]?/, "");
+            const resultsDir = path.join(__dirname, "..", "ExtractedFileComponents");
             if (!fs.existsSync(resultsDir)) {
                 console.error("ExtractedFileComponents directory does not exist:", resultsDir);
                 return { classes: [] }; // Return empty structure

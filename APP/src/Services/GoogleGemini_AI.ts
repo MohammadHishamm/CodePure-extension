@@ -1,18 +1,10 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
-import path from 'path';
-import dotenv from 'dotenv';
 
-export async function getFixSuggestion(code: string, issue: string) {
-    let filePath = path.resolve(__dirname, '..', '.env');
-    filePath = filePath.replace(/out[\\\/]?/, "");
 
-    dotenv.config({ path: filePath });
+export async function getFixSuggestion(code: string, issue: string) 
+{
 
-    if (!process.env.Google_Gemini_API_KEY) {
-        throw new Error('API_KEY is missing in the .env file');
-    }
-    
-    const API_KEY = process.env.Google_Gemini_API_KEY;
+    const API_KEY = "AIzaSyAEDdw0JG5z2HL2BLDsHv3T-q-wEfLS8j0";
     
     try {
         const genAI = new GoogleGenerativeAI(API_KEY);

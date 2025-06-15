@@ -6,7 +6,6 @@ import {
   metricsSaver,
   servermetricsmanager,
   FECFcode,
-  pythonParser,
   javaParser,
 } from "../initialize";
 import { pause } from "../utils";
@@ -27,12 +26,10 @@ function getMetricsFilePath(document: vscode.TextDocument): string {
   let filePath = path.join(
     __dirname,
     "..",
-    "src",
     "Results",
     `${fileName}.json`
   );
-  // Handle the "out" directory in the path
-  filePath = filePath.replace(/out[\\\/]?/, "");
+
   return filePath;
 }
 let createdMetricsFiles: string[] = [];
@@ -53,9 +50,8 @@ function saveMetricsToIndividualFile(
     };
 
     // Create directory if it doesn't exist
-    let resultsDir = path.join(__dirname, "..", "src", "Results");
-    // Handle the "out" directory in the path
-    resultsDir = resultsDir.replace(/out[\\\/]?/, "");
+    let resultsDir = path.join(__dirname, "..", "Results");
+
 
     if (!fs.existsSync(resultsDir)) {
       fs.mkdirSync(resultsDir, { recursive: true });
@@ -92,8 +88,8 @@ export function cleanupMetricsFiles(): void {
 
     // Optionally, try to remove the Results directory if it's empty
     const resultsDir = path
-      .join(__dirname, "..", "src", "Results")
-      .replace(/out[\\\/]?/, "");
+      .join(__dirname,"..", "Results")
+
     if (fs.existsSync(resultsDir)) {
       const files = fs.readdirSync(resultsDir);
       if (files.length === 0) {
@@ -127,7 +123,7 @@ export async function analyzeCode(
     },
     async (progress) => {
       const parser =
-        document.languageId === "java" ? new javaParser() : new pythonParser();
+        document.languageId === "java" ? new javaParser() : new javaParser();
       parser.selectLanguage();
 
       const rootNode = parser.parse(sourceCode);

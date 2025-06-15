@@ -7,57 +7,80 @@ exports.ServerMetricsManager = void 0;
 const node_fetch_1 = __importDefault(require("node-fetch"));
 const fs_1 = __importDefault(require("fs"));
 const path_1 = __importDefault(require("path"));
-const dotenv_1 = __importDefault(require("dotenv"));
 class ServerMetricsManager {
     serverUrl;
     apiKey;
-    filePath;
     constructor() {
-        this.filePath = path_1.default.resolve(__dirname, "..", ".env");
-        this.filePath = this.filePath.replace(/out[\\\/]?/, "");
-        dotenv_1.default.config({ path: this.filePath });
-        this.serverUrl = "http://localhost:3000";
-        if (!process.env.API_KEY) {
-            throw new Error("API_KEY is missing in the .env file");
+        // Update this to your AWS API Gateway endpoint
+        this.serverUrl =
+            "https://beo09xx2gh.execute-api.eu-north-1.amazonaws.com/prod";
+        // API key is hardcoded for AWS API Gateway
+        this.apiKey = "yeGY1v9j8MiOSorrOrnMtQx8KPeHGOSm"; // Replace with your actual API key
+        // Debug logging (remove in production)
+        console.log("AWS API Gateway URL:", this.serverUrl);
+        console.log("API Key configured:", this.apiKey ? "✓" : "✗");
+    }
+    /**
+     * Get headers with API key for AWS API Gateway requests
+     */
+    getHeaders() {
+        const headers = {
+            "Content-Type": "application/json",
+        };
+        // Add API key header if available
+        if (this.apiKey) {
+            headers["x-api-key"] = this.apiKey;
         }
-        this.apiKey = process.env.API_KEY;
+        return headers;
     }
     // Function to check if the server is online
     async checkServerStatus() {
         try {
             const response = await (0, node_fetch_1.default)(`${this.serverUrl}/`, {
                 method: "GET",
-                headers: {
-                    "x-api-key": this.apiKey,
-                },
+                headers: this.getHeaders(),
             });
             if (response.ok) {
-                console.log("CodePure Extension: Trying To Connect To The Server.");
+                console.log("CodePure Extension: Successfully Connected To AWS API Gateway.");
                 const data = await response.text();
                 console.log(data);
                 return true;
             }
             else {
-                console.error("Server is not responding:", response.statusText);
+                console.error("AWS API Gateway is not responding:", response.statusText);
+                console.error("Response status:", response.status);
+                // Try to get error details
+                try {
+                    const errorData = await response.text();
+                    console.error("Error response body:", errorData);
+                }
+                catch (e) {
+                    console.error("Could not read error response body");
+                }
                 return false;
             }
         }
         catch (error) {
-            console.error("Error connecting to server:", error);
+            console.error("Error connecting to AWS API Gateway:", error);
             return false;
         }
     }
     /**
-     * Sends a metrics file to the server and gets predictions back
+     * Sends a metrics file to the AWS API Gateway and gets predictions back
      * @param filePath Path to specific metrics file
      * @returns Promise with the server response
      */
     async sendMetricsFile(filePath) {
         try {
+            // Check if API key is available
+            if (!this.apiKey || this.apiKey === "YOUR_API_KEY_HERE") {
+                console.error("Cannot send metrics: API key is not configured. Please update the hardcoded API key in the constructor.");
+                return null;
+            }
             // If no specific file path is provided, use the last metrics file
             if (!filePath) {
                 const resultsDir = path_1.default.join(__dirname, "..", "src", "Results");
-                const resultsPath = resultsDir.replace(/out[\\\/]?/, "");
+                const resultsPath = resultsDir;
                 // Get all JSON files in the Results directory
                 const files = fs_1.default
                     .readdirSync(resultsPath)
@@ -77,7 +100,7 @@ class ServerMetricsManager {
             }
             else {
                 // Ensure the path is correct when provided
-                filePath = filePath.replace(/out[\\\/]?/, "");
+                filePath = filePath;
             }
             if (!fs_1.default.existsSync(filePath)) {
                 console.error(`Metrics file not found: ${filePath}`);
@@ -94,40 +117,51 @@ class ServerMetricsManager {
             metricsData.fileName = fileName;
             // Wrap the metrics data in an array to match server expectations
             const serverReadyData = [metricsData];
-            console.log("Sending data to server:", JSON.stringify(serverReadyData, null, 2));
+            console.log("Sending data to AWS API Gateway:", JSON.stringify(serverReadyData, null, 2));
             const response = await (0, node_fetch_1.default)(`${this.serverUrl}/metrics`, {
                 method: "POST",
-                headers: {
-                    "Content-Type": "application/json",
-                    "x-api-key": this.apiKey,
-                },
+                headers: this.getHeaders(),
                 body: JSON.stringify(serverReadyData), // Send as array
             });
             if (response.ok) {
-                console.log("CodePure Extension: Metrics Sent To The Server.");
+                console.log("CodePure Extension: Metrics Sent To AWS API Gateway.");
                 const data = await response.json();
-                console.log(data);
+                console.log("AWS Response:", data);
+                // The response structure matches what you showed:
+                // {
+                //   "message": "CodePure server: data received successfully. (Mock response for testing)",
+                //   "predictions": [{"Brain Class": 0, "Data Class": 0, "God Class": 1, "Schizofrenic Class": 0, "fileName": "Godclass"}]
+                // }
                 return data;
             }
             else {
-                console.error("Failed to send metrics file:", response.statusText);
+                console.error("Failed to send metrics to AWS API Gateway:", response.statusText);
+                console.error("Response status:", response.status);
+                // Try to get error details from response
+                try {
+                    const errorData = await response.text();
+                    console.error("Error response body:", errorData);
+                }
+                catch (e) {
+                    console.error("Could not read error response body");
+                }
                 return null;
             }
         }
         catch (error) {
-            console.error("Error connecting to server:", error);
+            console.error("Error connecting to AWS API Gateway:", error);
             return null;
         }
     }
     /**
-     * Sends all metrics files in the Results directory to the server
+     * Sends all metrics files in the Results directory to the AWS API Gateway
      * This can be useful for batch analysis
      * @returns Promise with an array of server responses
      */
     async sendAllMetricsFiles() {
         try {
             const resultsDir = path_1.default.join(__dirname, "..", "src", "Results");
-            const resultsPath = resultsDir.replace(/out[\\\/]?/, "");
+            const resultsPath = resultsDir;
             if (!fs_1.default.existsSync(resultsPath)) {
                 console.error("Results directory not found");
                 return [];
@@ -145,12 +179,14 @@ class ServerMetricsManager {
                         response,
                     });
                 }
+                // Add a small delay between requests to avoid overwhelming the API
+                await new Promise((resolve) => setTimeout(resolve, 100));
             }
-            console.log(`Sent ${responses.length} out of ${files.length} metrics files to server`);
+            console.log(`Sent ${responses.length} out of ${files.length} metrics files to AWS API Gateway`);
             return responses;
         }
         catch (error) {
-            console.error("Error sending all metrics files:", error);
+            console.error("Error sending all metrics files to AWS API Gateway:", error);
             return [];
         }
     }

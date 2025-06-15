@@ -19,11 +19,6 @@ import { JavaDepthOfInheritanceTree } from "../Metrics/Java/JavaDIT";
 import { JavaNumberOfAddedServices } from "../Metrics/Java/JavaNAS";
 import { TCCCalculation } from "../Metrics/Java/JavaTCC";
 
-import { PythonCyclomaticComplexityMetric } from "../Metrics/Python/PythonCC";
-
-import { PythonNumberofAttributesMetric } from "../Metrics/Python/PythonNOA";
-import { PythonNumberOfAccessorMethods } from "../Metrics/Python/PythonNOAM";
-import { PythonNumberOfMethodsMetric } from "../Metrics/Python/PythonNOM";
 
 import { JavaAccessofImportData } from "../Metrics/Java/JavaFDP";
 import { JavaProportionOfNewAddedServices } from "../Metrics/Java/JavaPNAS";
@@ -40,7 +35,6 @@ export class MetricsFactory {
       case "java":
         return MetricsFactory.createJavaMetric(metricName);
       case "python":
-        return MetricsFactory.createPythonMetric(metricName);
       default:
         return null;
     }
@@ -99,26 +93,6 @@ export class MetricsFactory {
         return new TCCCalculation();
       case "DIT":
         return new JavaDepthOfInheritanceTree();
-      default:
-        return null;
-    }
-  }
-
-  // Dynamically create Python metric object
-  private static createPythonMetric(
-    metricName: string
-  ): MetricCalculator | null {
-    switch (metricName) {
-      case "LOC":
-      // return new PythonLOCMetric();
-      case "CC":
-        return new PythonCyclomaticComplexityMetric();
-      case "NOA":
-        return new PythonNumberofAttributesMetric();
-      case "NOM":
-        return new PythonNumberOfMethodsMetric();
-      case "NOAM":
-        return new PythonNumberOfAccessorMethods();
       default:
         return null;
     }

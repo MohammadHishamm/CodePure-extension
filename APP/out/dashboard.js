@@ -57,9 +57,12 @@ class CustomTreeProvider {
         vscode.commands.registerCommand("extension.syncDatabase", this.syncWithDatabase, this);
         this.checkAuthentication();
         // Set up file system watcher for the Results directory
-        const resultsDir = path
-            .join(__dirname, "..", "src", "Results")
-            .replace(/out[\\\/]?/, "");
+        const resultsDir = path.join(__dirname, "Results");
+        // Create directory if it does not exist
+        if (!fs.existsSync(resultsDir)) {
+            fs.mkdirSync(resultsDir, { recursive: true });
+            console.log(`✅ Created missing Results directory at: ${resultsDir}`);
+        }
         if (fs.existsSync(resultsDir)) {
             const watcher = vscode.workspace.createFileSystemWatcher(new vscode.RelativePattern(resultsDir, "*.json"));
             // When a file is created or changed
@@ -110,8 +113,7 @@ class CustomTreeProvider {
     }
     async fetchMetricsData() {
         let resultsDir = path
-            .join(__dirname, "..", "src", "Results")
-            .replace(/out[\\\/]?/, "");
+            .join(__dirname, "Results");
         console.log(`Fetching metrics from directory: ${resultsDir}`);
         if (!fs.existsSync(resultsDir)) {
             console.error("Results directory does not exist.");
@@ -470,8 +472,7 @@ class CustomTreeProvider {
             return;
         }
         // Get the path to the Results directory
-        let resultsDir = path.join(__dirname, "..", "src", "Results");
-        resultsDir = resultsDir.replace(/out[\\\/]?/, "");
+        let resultsDir = path.join(__dirname, "Results");
         try {
             if (fs.existsSync(resultsDir)) {
                 // Read all JSON files in the directory
@@ -500,8 +501,8 @@ class CustomTreeProvider {
     }
     savePredictionCache() {
         try {
-            const cacheDir = path.join(__dirname, "..", "src", "Cache");
-            const cachePath = cacheDir.replace(/out[\\\/]?/, "");
+            const cacheDir = path.join(__dirname, "Cache");
+            const cachePath = cacheDir;
             // Create cache directory if it doesn't exist
             if (!fs.existsSync(cachePath)) {
                 fs.mkdirSync(cachePath, { recursive: true });
@@ -517,8 +518,8 @@ class CustomTreeProvider {
     }
     loadPredictionCache() {
         try {
-            const cacheDir = path.join(__dirname, "..", "src", "Cache");
-            const cachePath = cacheDir.replace(/out[\\\/]?/, "");
+            const cacheDir = path.join(__dirname, "Cache");
+            const cachePath = cacheDir;
             const cachefile = path.join(cachePath, "prediction-cache.json");
             if (fs.existsSync(cachefile)) {
                 const cacheData = JSON.parse(fs.readFileSync(cachefile, "utf8"));

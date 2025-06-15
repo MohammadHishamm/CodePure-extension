@@ -6,7 +6,6 @@ import { MetricsSaver } from "./Saver/MetricsSaver";
 import { CustomTreeProvider } from "./dashboard";
 import { FolderExtractComponentsFromCode } from "./Extractors/FolderExtractComponentsFromCode";
 import { javaParser } from "./Languages/javaParser";
-import { pythonParser } from "./Languages/pythonParser";
 import { ServerMetricsManager } from "./services/ServerMetricsManager";
 
 export const FECFcode = new FolderExtractComponentsFromCode();
@@ -46,4 +45,4 @@ export async function initializeExtension(context: vscode.ExtensionContext) {
   context.subscriptions.push(outputChannel, statusBarItem);
 }
 
-export { pythonParser, javaParser };
+export {  javaParser };

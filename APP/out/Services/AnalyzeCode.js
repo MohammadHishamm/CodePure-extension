@@ -48,9 +48,7 @@ const diagnosticCollection = vscode.languages.createDiagnosticCollection("codepu
 // Utility function to get the metrics file path for a specific document
 function getMetricsFilePath(document) {
     const fileName = path.basename(document.fileName, path.extname(document.fileName));
-    let filePath = path.join(__dirname, "..", "src", "Results", `${fileName}.json`);
-    // Handle the "out" directory in the path
-    filePath = filePath.replace(/out[\\\/]?/, "");
+    let filePath = path.join(__dirname, "..", "Results", `${fileName}.json`);
     return filePath;
 }
 let createdMetricsFiles = [];
@@ -66,9 +64,7 @@ function saveMetricsToIndividualFile(filePath, metricsArray) {
             metrics: metricsArray,
         };
         // Create directory if it doesn't exist
-        let resultsDir = path.join(__dirname, "..", "src", "Results");
-        // Handle the "out" directory in the path
-        resultsDir = resultsDir.replace(/out[\\\/]?/, "");
+        let resultsDir = path.join(__dirname, "..", "Results");
         if (!fs.existsSync(resultsDir)) {
             fs.mkdirSync(resultsDir, { recursive: true });
         }
@@ -96,8 +92,7 @@ function cleanupMetricsFiles() {
         createdMetricsFiles = [];
         // Optionally, try to remove the Results directory if it's empty
         const resultsDir = path
-            .join(__dirname, "..", "src", "Results")
-            .replace(/out[\\\/]?/, "");
+            .join(__dirname, "..", "Results");
         if (fs.existsSync(resultsDir)) {
             const files = fs.readdirSync(resultsDir);
             if (files.length === 0) {
@@ -121,7 +116,7 @@ async function analyzeCode(document, sourceCode) {
         title: `Analyzing ${document.languageId} code`,
         cancellable: false,
     }, async (progress) => {
-        const parser = document.languageId === "java" ? new initialize_1.javaParser() : new initialize_1.pythonParser();
+        const parser = document.languageId === "java" ? new initialize_1.javaParser() : new initialize_1.javaParser();
         parser.selectLanguage();
         const rootNode = parser.parse(sourceCode);
         const metricsToCalculate = [

@@ -47,9 +47,7 @@ export class DashboardPanel {
   }
 
   private _getMetricsData() {
-    let resultsDir = path
-      .join(__dirname, "..", "src", "Results")
-      .replace(/out[\\\/]?/, "");
+    let resultsDir = path.join(__dirname, "Results");
 
     console.log(`Fetching metrics from directory: ${resultsDir}`);
 

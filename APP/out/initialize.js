@@ -33,7 +33,7 @@ var __importStar = (this && this.__importStar) || (function () {
     };
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.javaParser = exports.pythonParser = exports.statusBarItem = exports.outputChannel = exports.customTreeProvider = exports.metricsSaver = exports.metricsNotifier = exports.servermetricsmanager = exports.FECFcode = void 0;
+exports.javaParser = exports.statusBarItem = exports.outputChannel = exports.customTreeProvider = exports.metricsSaver = exports.metricsNotifier = exports.servermetricsmanager = exports.FECFcode = void 0;
 exports.initializeExtension = initializeExtension;
 const vscode = __importStar(require("vscode"));
 const MongoDB_1 = require("./services/MongoDB");
@@ -43,8 +43,6 @@ const dashboard_1 = require("./dashboard");
 const FolderExtractComponentsFromCode_1 = require("./Extractors/FolderExtractComponentsFromCode");
 const javaParser_1 = require("./Languages/javaParser");
 Object.defineProperty(exports, "javaParser", { enumerable: true, get: function () { return javaParser_1.javaParser; } });
-const pythonParser_1 = require("./Languages/pythonParser");
-Object.defineProperty(exports, "pythonParser", { enumerable: true, get: function () { return pythonParser_1.pythonParser; } });
 const ServerMetricsManager_1 = require("./services/ServerMetricsManager");
 exports.FECFcode = new FolderExtractComponentsFromCode_1.FolderExtractComponentsFromCode();
 exports.servermetricsmanager = new ServerMetricsManager_1.ServerMetricsManager();

@@ -46,7 +46,7 @@ export class UMLDashboard {
   }
 
   private _getExtractedUML(): any {
-    const resultsDir = path.join(__dirname, "..", "uml").replace(/out[\\\/]?/, "");
+    const resultsDir = path.join(__dirname, "uml");
     if (!fs.existsSync(resultsDir)) {
       fs.mkdirSync(resultsDir, { recursive: true });
     }
