@@ -25,7 +25,7 @@
 7. **Cross-Language Support**: 
    Compatible with multiple programming languages.
 
-![feature X](images/feature-x.png)
+   (APP\src\Assets\codepure-logo.png)
 
 > Tip: Many popular extensions utilize animations. This is an excellent way to show off your extension! We recommend short, focused animations that are easy to follow.
 
